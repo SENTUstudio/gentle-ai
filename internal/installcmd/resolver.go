@@ -36,9 +36,9 @@ func (profileResolver) ResolveAgentInstall(profile system.PlatformProfile, agent
 }
 
 // resolveClaudeCodeInstall returns the npm install command sequence for Claude Code.
-// On Linux, sudo is required because npm global installs write to system directories.
+// On Linux with system npm, sudo is required. With nvm/fnm/volta, it is not.
 func resolveClaudeCodeInstall(profile system.PlatformProfile) CommandSequence {
-	if profile.OS == "linux" {
+	if profile.OS == "linux" && !profile.NpmWritable {
 		return CommandSequence{{"sudo", "npm", "install", "-g", "@anthropic-ai/claude-code"}}
 	}
 	return CommandSequence{{"npm", "install", "-g", "@anthropic-ai/claude-code"}}
@@ -88,6 +88,9 @@ func resolveOpenCodeInstall(profile system.PlatformProfile) (CommandSequence, er
 			{"brew", "install", "anomalyco/tap/opencode"},
 		}, nil
 	case "apt", "pacman":
+		if profile.NpmWritable {
+			return CommandSequence{{"npm", "install", "-g", "opencode-ai"}}, nil
+		}
 		return CommandSequence{{"sudo", "npm", "install", "-g", "opencode-ai"}}, nil
 	default:
 		return nil, fmt.Errorf(

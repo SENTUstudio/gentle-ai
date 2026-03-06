@@ -3,6 +3,7 @@ package system
 import (
 	"context"
 	"os"
+	"os/exec"
 	"runtime"
 	"strings"
 )
@@ -19,6 +20,7 @@ type PlatformProfile struct {
 	OS             string
 	LinuxDistro    string
 	PackageManager string
+	NpmWritable    bool // true when npm global prefix is user-writable (nvm/fnm/volta)
 	Supported      bool
 }
 
@@ -51,9 +53,21 @@ func Detect(ctx context.Context) (DetectionResult, error) {
 	osReleaseContent, _ := osReleaseContent(runtime.GOOS)
 
 	result := detectFromInputs(runtime.GOOS, runtime.GOARCH, os.Getenv("SHELL"), osReleaseContent, tools, configs)
+	result.System.Profile.NpmWritable = detectNpmWritable(homeDir)
 	result.Dependencies = DetectDependencies(ctx, result.System.Profile)
 
 	return result, nil
+}
+
+// detectNpmWritable checks if npm's global prefix is under the user's home
+// directory (nvm, fnm, volta, etc.), meaning sudo is not needed for global installs.
+func detectNpmWritable(homeDir string) bool {
+	out, err := exec.Command("npm", "config", "get", "prefix").Output()
+	if err != nil {
+		return false
+	}
+	prefix := strings.TrimSpace(string(out))
+	return strings.HasPrefix(prefix, homeDir)
 }
 
 func detectFromInputs(goos, arch, shell, linuxOSRelease string, tools map[string]ToolStatus, configs []ConfigState) DetectionResult {

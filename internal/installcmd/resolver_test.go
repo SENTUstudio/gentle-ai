@@ -85,13 +85,19 @@ func TestResolveAgentInstall(t *testing.T) {
 			want:    CommandSequence{{"npm", "install", "-g", "@anthropic-ai/claude-code"}},
 		},
 		{
-			name:    "claude-code on linux uses sudo npm",
+			name:    "claude-code on linux system npm uses sudo",
 			profile: system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroUbuntu, PackageManager: "apt"},
 			agent:   model.AgentClaudeCode,
 			want:    CommandSequence{{"sudo", "npm", "install", "-g", "@anthropic-ai/claude-code"}},
 		},
 		{
-			name:    "claude-code on arch uses sudo npm",
+			name:    "claude-code on linux nvm skips sudo",
+			profile: system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroUbuntu, PackageManager: "apt", NpmWritable: true},
+			agent:   model.AgentClaudeCode,
+			want:    CommandSequence{{"npm", "install", "-g", "@anthropic-ai/claude-code"}},
+		},
+		{
+			name:    "claude-code on arch system npm uses sudo",
 			profile: system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroArch, PackageManager: "pacman"},
 			agent:   model.AgentClaudeCode,
 			want:    CommandSequence{{"sudo", "npm", "install", "-g", "@anthropic-ai/claude-code"}},
@@ -103,13 +109,19 @@ func TestResolveAgentInstall(t *testing.T) {
 			want:    CommandSequence{{"brew", "install", "anomalyco/tap/opencode"}},
 		},
 		{
-			name:    "opencode on ubuntu uses npm install",
+			name:    "opencode on ubuntu system npm uses sudo",
 			profile: system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroUbuntu, PackageManager: "apt"},
 			agent:   model.AgentOpenCode,
 			want:    CommandSequence{{"sudo", "npm", "install", "-g", "opencode-ai"}},
 		},
 		{
-			name:    "opencode on arch uses npm install",
+			name:    "opencode on ubuntu nvm skips sudo",
+			profile: system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroUbuntu, PackageManager: "apt", NpmWritable: true},
+			agent:   model.AgentOpenCode,
+			want:    CommandSequence{{"npm", "install", "-g", "opencode-ai"}},
+		},
+		{
+			name:    "opencode on arch system npm uses sudo",
 			profile: system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroArch, PackageManager: "pacman"},
 			agent:   model.AgentOpenCode,
 			want:    CommandSequence{{"sudo", "npm", "install", "-g", "opencode-ai"}},
