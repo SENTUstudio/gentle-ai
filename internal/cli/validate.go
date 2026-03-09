@@ -153,6 +153,12 @@ func defaultAgentsFromDetection(detection system.DetectionResult) []model.AgentI
 			agents = append(agents, model.AgentClaudeCode)
 		case string(model.AgentOpenCode):
 			agents = append(agents, model.AgentOpenCode)
+		case string(model.AgentGeminiCLI):
+			agents = append(agents, model.AgentGeminiCLI)
+		case string(model.AgentCursor):
+			agents = append(agents, model.AgentCursor)
+		case string(model.AgentVSCodeCopilot):
+			agents = append(agents, model.AgentVSCodeCopilot)
 		}
 	}
 
@@ -160,7 +166,7 @@ func defaultAgentsFromDetection(detection system.DetectionResult) []model.AgentI
 		return agents
 	}
 
-	catalogAgents := catalog.MVPAgents()
+	catalogAgents := catalog.AllAgents()
 	agents = make([]model.AgentID, 0, len(catalogAgents))
 	for _, agent := range catalogAgents {
 		agents = append(agents, agent.ID)

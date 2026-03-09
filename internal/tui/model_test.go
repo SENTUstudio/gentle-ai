@@ -277,5 +277,11 @@ func TestBackupRestoreMsgHandledGracefully(t *testing.T) {
 }
 
 func screensAgentOptions() []model.AgentID {
-	return []model.AgentID{model.AgentClaudeCode, model.AgentOpenCode}
+	return []model.AgentID{
+		model.AgentClaudeCode,
+		model.AgentOpenCode,
+		model.AgentGeminiCLI,
+		model.AgentCursor,
+		model.AgentVSCodeCopilot,
+	}
 }

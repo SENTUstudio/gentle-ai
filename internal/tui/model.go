@@ -608,6 +608,12 @@ func preselectedAgents(detection system.DetectionResult) []model.AgentID {
 			selected = append(selected, model.AgentClaudeCode)
 		case string(model.AgentOpenCode):
 			selected = append(selected, model.AgentOpenCode)
+		case string(model.AgentGeminiCLI):
+			selected = append(selected, model.AgentGeminiCLI)
+		case string(model.AgentCursor):
+			selected = append(selected, model.AgentCursor)
+		case string(model.AgentVSCodeCopilot):
+			selected = append(selected, model.AgentVSCodeCopilot)
 		}
 	}
 
@@ -615,7 +621,7 @@ func preselectedAgents(detection system.DetectionResult) []model.AgentID {
 		return selected
 	}
 
-	agents := catalog.MVPAgents()
+	agents := catalog.AllAgents()
 	selected = make([]model.AgentID, 0, len(agents))
 	for _, agent := range agents {
 		selected = append(selected, agent.ID)
