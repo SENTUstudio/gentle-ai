@@ -188,7 +188,9 @@ SITE_PATH = os.getenv("SITE_PATH", "/sites/toyota-chile")
 
 def resolve_site_id(headers: dict, hostname: str, site_path: str) -> str:
     """Resolve SharePoint site ID from hostname and path."""
-    url = f"https://graph.microsoft.com/v1.0/sites/{hostname}:{site_path}"
+    import urllib.parse
+    encoded_path = urllib.parse.quote(site_path, safe='/:')
+    url = f"https://graph.microsoft.com/v1.0/sites/{hostname}:{encoded_path}"
     response = requests.get(url, headers=headers)
     response.raise_for_status()
     return response.json()["id"]
