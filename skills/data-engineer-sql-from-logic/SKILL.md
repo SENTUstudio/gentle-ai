@@ -197,12 +197,12 @@ SELECT * FROM final_output
 WITH transformed_dates AS (
     SELECT
         id,
-        -- Parse DD/MM/YYYY (Spanish locale)
-        TO_DATE(date_str, 'DD/MM/YYYY') AS parsed_date,
-        -- Extract year/month/day for partitioning
-        YEAR(date_str, 'DD/MM/YYYY') AS year,
-        MONTH(date_str, 'DD/MM/YYYY') AS month,
-        DAY(date_str, 'DD/MM/YYYY') AS day,
+        -- Parse DD/MM/YYYY (Spanish locale) — Java SimpleDateFormat
+        TO_DATE(date_str, 'dd/MM/yyyy') AS parsed_date,
+        -- Extract year/month/day for partitioning (YEAR/MONTH/DAY are unary)
+        YEAR(CAST(TO_DATE(date_str, 'dd/MM/yyyy') AS DATE)) AS year,
+        MONTH(CAST(TO_DATE(date_str, 'dd/MM/yyyy') AS DATE)) AS month,
+        DAY(CAST(TO_DATE(date_str, 'dd/MM/yyyy') AS DATE)) AS day,
         -- Handle null dates
         COALESCE(original_date, '1900-01-01') AS effective_date
     FROM source_table
