@@ -135,7 +135,9 @@ def create_project_structure(base_path: str, project_name: str):
     (base / "__init__.py").touch()
     
     # Create skeleton files
-    (project_dir / "error_files.ipynb").write_text("# Error investigation notebook\n")
+    import json
+    nb = {"nbformat": 4, "nbformat_minor": 4, "metadata": {}, "cells": []}
+    (project_dir / "error_files.ipynb").write_text(json.dumps(nb, indent=1))
     (project_dir / "esquema.md").write_text("# Schema Documentation\n\n## Tables\n\n## Columns\n")
     
     # Create config files (shared by all projects)
