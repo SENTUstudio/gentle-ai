@@ -29,6 +29,14 @@ var mvpSkills = []Skill{
 	{ID: model.SkillBranchPR, Name: "branch-pr", Category: "workflow", Priority: "p0"},
 	{ID: model.SkillIssueCreation, Name: "issue-creation", Category: "workflow", Priority: "p0"},
 	{ID: model.SkillSkillRegistry, Name: "skill-registry", Category: "workflow", Priority: "p0"},
+	// Data engineering skills
+	{ID: model.SkillDataEngineerStudyFile, Name: "data-engineer-study-file", Category: "data-engineering", Priority: "p0"},
+	{ID: model.SkillDataEngineerSQLFromLogic, Name: "data-engineer-sql-from-logic", Category: "data-engineering", Priority: "p0"},
+	{ID: model.SkillDataEngineerETLS3, Name: "data-engineer-etl-s3", Category: "data-engineering", Priority: "p0"},
+	{ID: model.SkillDataEngineerETLGlue, Name: "data-engineer-etl-glue", Category: "data-engineering", Priority: "p0"},
+	{ID: model.SkillDataEngineerETLSharePoint, Name: "data-engineer-etl-sharepoint", Category: "data-engineering", Priority: "p0"},
+	{ID: model.SkillDataEngineerCreateTable, Name: "data-engineer-create-table", Category: "data-engineering", Priority: "p0"},
+	{ID: model.SkillDataEngineerIntegrate, Name: "data-engineer-integrate", Category: "data-engineering", Priority: "p0"},
 }
 
 func MVPSkills() []Skill {

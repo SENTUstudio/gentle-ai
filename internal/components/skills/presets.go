@@ -24,6 +24,13 @@ var foundationSkills = []model.SkillID{
 	model.SkillBranchPR,
 	model.SkillIssueCreation,
 	model.SkillSkillRegistry,
+	model.SkillDataEngineerStudyFile,
+	model.SkillDataEngineerSQLFromLogic,
+	model.SkillDataEngineerETLS3,
+	model.SkillDataEngineerETLGlue,
+	model.SkillDataEngineerETLSharePoint,
+	model.SkillDataEngineerCreateTable,
+	model.SkillDataEngineerIntegrate,
 }
 
 // SkillsForPreset returns which skills should be installed for a given preset.

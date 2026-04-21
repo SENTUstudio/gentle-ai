@@ -75,7 +75,14 @@ const (
 	SkillJudgmentDay   SkillID = "judgment-day"
 	SkillBranchPR      SkillID = "branch-pr"
 	SkillIssueCreation SkillID = "issue-creation"
-	SkillSkillRegistry SkillID = "skill-registry"
+	SkillSkillRegistry           SkillID = "skill-registry"
+	SkillDataEngineerStudyFile   SkillID = "data-engineer-study-file"
+	SkillDataEngineerSQLFromLogic SkillID = "data-engineer-sql-from-logic"
+	SkillDataEngineerETLS3       SkillID = "data-engineer-etl-s3"
+	SkillDataEngineerETLGlue     SkillID = "data-engineer-etl-glue"
+	SkillDataEngineerETLSharePoint SkillID = "data-engineer-etl-sharepoint"
+	SkillDataEngineerCreateTable  SkillID = "data-engineer-create-table"
+	SkillDataEngineerIntegrate   SkillID = "data-engineer-integrate"
 )
 
 type PersonaID string

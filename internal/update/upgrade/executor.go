@@ -363,9 +363,10 @@ func executeOne(ctx context.Context, r update.UpdateResult, profile system.Platf
 }
 
 // effectiveMethod resolves the actual upgrade strategy for a tool on a given platform.
-// On brew-managed platforms, brew takes precedence over the tool's declared method.
+// On brew-managed platforms, brew takes precedence over the tool's declared method,
+// except for gentle-ai itself (we maintain our own binary via go install).
 func effectiveMethod(tool update.ToolInfo, profile system.PlatformProfile) update.InstallMethod {
-	if profile.PackageManager == "brew" {
+	if profile.PackageManager == "brew" && tool.Name != "gentle-ai" {
 		return update.InstallBrew
 	}
 	return tool.InstallMethod
