@@ -1,0 +1,59 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Glue Jobs for stg_encuestas ETL (CARGA repo pattern)"
+
+Parameters:
+  Entorno:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prd
+  DBDiscriminator:
+    Type: String
+    Default: ""
+  BUCKET_RAW:
+    Type: String
+    Default: infra-contac-dev-contactabilidad-usuario
+  BUCKET_STG:
+    Type: String
+    Default: infra-contac-dev-stg-encuestas
+  InfraDatalakeStackName:
+    Type: String
+    Default: infra-datos-stg-encuestas
+  InfraDatalakeStgStackName:
+    Type: String
+    Default: infra-datos-stg-encuestas
+  InfraWorkflowSNS:
+    Type: String
+    Default: infra-workflow-sns
+
+Resources:
+  EtlStgEncuestasCarga:
+    Type: AWS::Glue::Job
+    Properties:
+      Name: !Sub "ETL_stg_encuestas_carga${DBDiscriminator}"
+      Description: "ETL stg_encuestas (Source: S3 CSV)"
+      Role:
+        Fn::ImportValue: !Sub "${InfraDatalakeStackName}-GlueGGExecutionRoleArn"
+      GlueVersion: "5.0"
+      WorkerType: G.4X
+      NumberOfWorkers: 10
+      Timeout: 2880
+      Command:
+        Name: glueetl
+        PythonVersion: "3"
+        ScriptLocation: ./glue-jobs/ETL_stg_encuestas_carga.py
+      DefaultArguments:
+        "--job-language": python
+        "--enable-glue-datacatalog": "true"
+        "--additional-python-modules": "awswrangler"
+        "--job-bookmark-option": "job-bookmark-disable"
+        "--TempDir": !Sub "s3://${BUCKET_STG}/temporary/"
+        "--BUCKET_RAW": !Ref BUCKET_RAW
+        "--BUCKET_STG":
+          Fn::ImportValue: !Sub "${InfraDatalakeStgStackName}-EncuestasName"
+        "--TOPIC_SNS":
+          Fn::ImportValue: !Sub "${InfraWorkflowSNS}-topico1SnsDatalakeArn"
+      Tags:
+        Entorno: !Ref Entorno
+        Project: "carga-datos-stg-encuestas"
