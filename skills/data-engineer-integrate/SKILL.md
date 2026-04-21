@@ -57,9 +57,9 @@ metadata:
 
 ```
 estudios/
-├── config/
-│   ├── dev.yaml        # Dev environment variables
-│   └── prd.yaml        # Production environment variables
+├── config/                # Shared config (sibling to all projects)
+│   ├── dev.yaml           # Dev environment variables
+│   └── prd.yaml           # Production environment variables
 ├── <nombre_proyecto>/
 │   ├── dev_<proyecto>.py   # Dev ETL entry point
 │   ├── prd_<proyecto>.py   # Production ETL entry point
@@ -113,27 +113,32 @@ PROJECT_NAME = "mi_proyecto"
 
 def create_project_structure(base_path: str, project_name: str):
     """Create project directory structure."""
-    base = Path(base_path) / project_name
+    base = Path(base_path)
+    project_dir = base / project_name
     
     directories = [
-        "config",
-        "input",
-        "output/Quicksight",
-        "output/dev",
-        "versions",
-        "docs/arquitectura",
-        "docs/datos",
-        "docs/migracion",
+        project_dir / "input",
+        project_dir / "output" / "Quicksight",
+        project_dir / "output" / "dev",
+        project_dir / "versions",
+        base / "config",
+        base / "docs" / "arquitectura",
+        base / "docs" / "datos",
+        base / "docs" / "migracion",
     ]
     
     for dir_path in directories:
-        (base / dir_path).mkdir(parents=True, exist_ok=True)
+        dir_path.mkdir(parents=True, exist_ok=True)
     
     # Create __init__.py files
     (base / "config" / "__init__.py").touch()
-    (base.parent / "__init__.py").touch()
+    (base / "__init__.py").touch()
     
-    # Create config files
+    # Create skeleton files
+    (project_dir / "error_files.ipynb").write_text("# Error investigation notebook\n")
+    (project_dir / "esquema.md").write_text("# Schema Documentation\n\n## Tables\n\n## Columns\n")
+    
+    # Create config files (shared by all projects)
     dev_config = {
         "environment": "dev",
         "bucket_raw": "toyota-chile-raw-data-dev",
