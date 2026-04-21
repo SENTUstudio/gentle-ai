@@ -45,8 +45,8 @@ Phase 3 (CARGA repo): Enable writes
 
 ```yaml
 Name:
-  'Fn::Sub': '${table_name}${DBDiscriminator}'
-Description: "Stage {{AWS::StackName}} <table description>"
+  'Fn::Sub': '${stg_encuestas}${DBDiscriminator}'
+Description: !Sub "Stage ${AWS::StackName} <table description>"
 TableType: EXTERNAL_TABLE
 Parameters:
   classification: parquet
@@ -137,7 +137,7 @@ Resources:
       DatabaseName: !Ref DatabaseName
       TableInput:
         Name:
-          Fn::Sub: '${table_name}${DBDiscriminator}'
+          Fn::Sub: '${stg_encuestas}${DBDiscriminator}'
         Description: !Sub "Stage ${AWS::StackName} <description>"
         TableType: EXTERNAL_TABLE
         Parameters:
