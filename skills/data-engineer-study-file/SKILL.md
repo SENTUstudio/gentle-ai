@@ -91,17 +91,25 @@ from datetime import datetime
 import re
 
 DATE_PATTERNS = [
-    (r'\d{4}-\d{2}-\d{2}', 'YYYY-MM-DD'),        # ISO8601
-    (r'\d{2}/\d{2}/\d{4}', 'DD/MM/YYYY'),        # Spanish
-    (r'\d{2}/\d{2}/\d{4}', 'MM/DD/YYYY'),        # US (ambiguous)
+    (r'\d{4}-\d{2}-\d{2}', 'YYYY-MM-DD'),        # ISO8601 (unambiguous)
+    (r'\d{2}/\d{2}/\d{4}', None),                 # Ambiguous — resolve with heuristic
 ]
 
 def detect_date_format(sample_values: list) -> str:
-    """Detect date format from sample values."""
+    """Detect date format from sample values, disambiguating day-first vs month-first."""
     formats = {}
     for val in sample_values:
+        v = str(val)
         for pattern, fmt in DATE_PATTERNS:
-            if re.match(pattern, str(val)):
+            if re.match(pattern, v):
+                if fmt is None:
+                    first, second = int(v.split('/')[0]), int(v.split('/')[1])
+                    if first > 12:
+                        fmt = 'DD/MM/YYYY'
+                    elif second > 12:
+                        fmt = 'MM/DD/YYYY'
+                    else:
+                        fmt = 'DD/MM/YYYY (ambiguous)'
                 formats[fmt] = formats.get(fmt, 0) + 1
     return max(formats, key=formats.get) if formats else 'unknown'
 ```
