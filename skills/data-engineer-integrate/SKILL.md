@@ -164,7 +164,7 @@ def create_project_structure(base_path: str, project_name: str):
 from pathlib import Path
 import yaml
 
-CONFIG_PATH = Path(__file__).parent / "config" / "dev.yaml"
+CONFIG_PATH = Path(__file__).parent.parent / "config" / "dev.yaml"
 
 def main():
     with open(CONFIG_PATH) as f:
