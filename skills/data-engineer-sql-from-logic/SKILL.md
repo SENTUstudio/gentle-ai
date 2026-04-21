@@ -35,6 +35,9 @@ Use logical, descriptive names for each transformation step:
 - Use `NVL()` or `COALESCE()` for null handling
 - Window functions: `ROW_NUMBER() OVER (PARTITION BY ... ORDER BY ...)` is standard
 
+### Date Ambiguity Resolution
+When `detect_date_format` returns `'DD/MM/YYYY (ambiguous)'`, assume DD/MM/YYYY (Spanish locale for Toyota Chile) unless overridden by analyst. Use `TO_DATE(date_str, 'dd/MM/yyyy')` as the default parse pattern.
+
 ### File Output Location
 Save to `src/artefactos/<table_name>.sql` — **outside official CARGA/INFRA repos**
 - `src/artefactos/` is the staging area for generated SQL

@@ -37,6 +37,7 @@ metadata:
   - `DD/MM/YYYY` — Spanish locale (day-first)
   - `MM/DD/YYYY` — US locale (month-first)
   - `YYYY-MM-DD` — ISO8601 (unambiguous)
+- When date format is ambiguous (neither first nor second component exceeds 12), assume DD/MM/YYYY (Spanish locale for Toyota Chile) unless overridden by analyst
 - Null representations: empty string, `NULL`, `N/A`, `"1900-01-01"` (Excel epoch)
 
 ### Control Character Removal
