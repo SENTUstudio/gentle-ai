@@ -65,10 +65,15 @@ When extracting schema (Phase 1 of three-phase workflow):
 
 import sys
 import os
+import logging
 from datetime import datetime, date
 from pyspark.context import SparkContext
 from awsglue.context import GlueContext
 from awsglue.dynamicframe import DynamicFrame
+from awsglue.job import Job
+from awsglue.utils import getResolvedOptions
+from pyspark.sql.functions import lit
+import fnmatch
 import awswrangler as wr
 
 # Configuration
@@ -79,7 +84,8 @@ S3_OUTPUT_PATH = f"s3://{BUCKET}/<table_name>/"
 
 # Glue Catalog configuration
 GLUE_DATABASE = os.getenv("GLUE_DATABASE", "toyota_chile")
-GLUE_TABLE = os.getenv("GLUE_TABLE", "stg_<table_name>")
+# Encoding — should come from study-file output; defaults to UTF-8
+ENCODING = os.getenv("ENCODING", "UTF-8")
 
 def clean_column_name(name: str) -> str:
     """Normalize column names: lowercase, underscores."""
@@ -95,11 +101,12 @@ def get_last_load_timestamp(database: str, table: str) -> str:
             database=database
         )
         return result['ts'].iloc[0] if len(result) > 0 else "1970-01-01"
-    except:
+    except Exception:
+        logging.warning("Failed to get last load timestamp, using epoch")
         return "1970-01-01"
 
 def get_s3_whitelist(bucket: str, prefix: str, pattern: str, last_load: str) -> list:
-    """Return S3 keys modified after last_load timestamp."""
+    """Return S3 keys matching pattern modified after last_load timestamp."""
     import boto3
     s3 = boto3.client('s3')
     files = []
@@ -107,15 +114,19 @@ def get_s3_whitelist(bucket: str, prefix: str, pattern: str, last_load: str) -> 
     for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
         for obj in page.get('Contents', []):
             if obj['LastModified'].isoformat() > last_load:
-                files.append(f"s3://{bucket}/{obj['Key']}")
+                if fnmatch.fnmatch(obj['Key'], f"{prefix}{pattern}"):
+                    files.append(f"s3://{bucket}/{obj['Key']}")
     return files
 
 # ============================================================================
 # INIT
 # ============================================================================
+args = getResolvedOptions(sys.argv, ["JOB_NAME", "BUCKET_RAW", "BUCKET_STG"])
 sc = SparkContext.getOrCreate()
 glueContext = GlueContext(sc)
 spark = glueContext.spark_session
+job = Job(glueContext)
+job.init(args["JOB_NAME"], args)
 
 # ============================================================================
 # READ (with watermark for incremental)
@@ -125,6 +136,7 @@ s3_files = get_s3_whitelist(BUCKET_RAW, "Output/", S3_FILE_PATTERN, last_load)
 
 if not s3_files:
     print("No new files to process")
+    job.commit()
     sys.exit(0)
 
 # Read with detected parameters from study-file
@@ -132,7 +144,7 @@ df = spark.read.csv(
     s3_files,
     header=True,
     sep=";",  # Toyota Chile uses semicolon
-    encoding="UTF-8",
+    encoding=ENCODING,  # From study-file output
     inferSchema=False
 )
 
@@ -164,6 +176,11 @@ df_final = df  # Placeholder
 # ============================================================================
 df_final.printSchema()
 print("Schema extraction complete")
+
+# ============================================================================
+# COMMIT — Always call job.commit() before exiting
+# ============================================================================
+job.commit()
 ```
 
 ### Schema Extraction Output
