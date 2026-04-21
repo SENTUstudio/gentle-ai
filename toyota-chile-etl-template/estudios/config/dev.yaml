@@ -6,7 +6,7 @@ AWS_REGION: us-east-1
 
 # S3 Buckets (Development)
 BUCKET_RAW: infra-contac-dev-contactabilidad-usuario
-BUCKET_STG: infra-contac-dev-contactabilidad-usuario
+BUCKET_STG: infra-contac-dev-stg-encuestas
 
 # Glue Database (Development)
 GLUE_DATABASE: db_dl_dev_stg_encuestas
