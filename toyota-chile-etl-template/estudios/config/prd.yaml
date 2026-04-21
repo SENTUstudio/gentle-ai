@@ -26,3 +26,6 @@ FOLDER_PATH: /Input/Prod
 # Logging
 LOG_LEVEL: INFO
 VERBOSE: false
+
+# File Encoding (Toyota Chile sources use latin-1)
+ENCODING: latin-1

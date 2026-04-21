@@ -26,3 +26,6 @@ FOLDER_PATH: /Input/Dev
 # Logging
 LOG_LEVEL: DEBUG
 VERBOSE: true
+
+# File Encoding (Toyota Chile sources use latin-1)
+ENCODING: latin-1
