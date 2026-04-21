@@ -42,6 +42,7 @@ def get_access_token() -> str:
     token = result.get("access_token")
     if not token:
         raise RuntimeError(f"MSAL auth failed: {result.get('error_description', result.get('error', 'unknown'))}")
+    return token
 ```
 
 ### ENV Variables Required
@@ -285,7 +286,7 @@ def lambda_handler(event, context):
 export TENANT_ID="your-tenant-id"
 export CLIENT_ID="your-client-id"
 export CLIENT_SECRET="your-client-secret"
-export SITE_NAME="toyota-chile"
+export SITE_PATH="/sites/toyota-chile"
 export FOLDER_PATH="/Shared Documents/ETL/Input"
 
 # Run locally

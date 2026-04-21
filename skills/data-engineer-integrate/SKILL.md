@@ -143,16 +143,18 @@ def create_project_structure(base_path: str, project_name: str):
     # Create config files (shared by all projects)
     dev_config = {
         "environment": "dev",
-        "bucket_raw": "toyota-chile-raw-data-dev",
-        "bucket_refined": "toyota-chile-refined-dev",
-        "glue_database": "toyota_chile_dev",
+        "BUCKET_RAW": "toyota-chile-raw-data-dev",
+        "BUCKET_STG": "toyota-chile-refined-dev",
+        "GLUE_DATABASE": "toyota_chile_dev",
+        "ENCODING": "latin-1",
     }
-    
+
     prd_config = {
         "environment": "prd",
-        "bucket_raw": "toyota-chile-raw-data",
-        "bucket_refined": "toyota-chile-refined",
-        "glue_database": "toyota_chile",
+        "BUCKET_RAW": "toyota-chile-raw-data",
+        "BUCKET_STG": "toyota-chile-refined",
+        "GLUE_DATABASE": "toyota_chile",
+        "ENCODING": "latin-1",
     }
     
     with open(base / "config" / "dev.yaml", "w") as f:
@@ -166,7 +168,7 @@ def create_project_structure(base_path: str, project_name: str):
 from pathlib import Path
 import yaml
 
-CONFIG_PATH = Path(__file__).parent.parent / "config" / "dev.yaml"
+CONFIG_PATH = Path(__file__).parent / "config" / "dev.yaml"
 
 def main():
     with open(CONFIG_PATH) as f:

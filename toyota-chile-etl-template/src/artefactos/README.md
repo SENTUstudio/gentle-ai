@@ -67,7 +67,7 @@ job.init(args["JOB_NAME"], args)
 last_load_timestamp = get_last_load_timestamp(GLUE_DATABASE, GLUE_TABLE)
 s3_files = get_s3_whitelist(BUCKET_RAW, "Output/", S3_FILE_PATTERN, last_load_timestamp)
 
-df = spark.read.csv(s3_files, header=True, sep="|", encoding="UTF-8")
+df = spark.read.csv(s3_files, header=True, sep=";", encoding="latin-1")
 
 # 5. TRANSFORMACIÓN
 # ... transformaciones ...
@@ -165,7 +165,10 @@ def get_access_token():
         client_credential=CLIENT_SECRET
     )
     result = app.acquire_token_for_client(scopes=["https://graph.microsoft.com/.default"])
-    return result["access_token"]
+    token = result.get("access_token")
+    if not token:
+        raise RuntimeError(f"MSAL auth failed: {result.get('error_description', result.get('error', 'unknown'))}")
+    return token
 
 def lambda_handler(event, context):
     access_token = get_access_token()

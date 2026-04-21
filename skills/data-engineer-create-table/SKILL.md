@@ -45,7 +45,7 @@ Phase 3 (CARGA repo): Enable writes
 
 ```yaml
 Name:
-  'Fn::Sub': '${stg_encuestas}${DBDiscriminator}'
+          'Fn::Sub': 'stg_encuestas${DBDiscriminator}'
 Description: !Sub "Stage ${AWS::StackName} <table description>"
 TableType: EXTERNAL_TABLE
 Parameters:
@@ -99,7 +99,7 @@ StorageDescriptor:
 # In CARGA repo: ETL script with commented writes
 
 # Read source data
-df = spark.read.csv(s3_files, header=True, sep=";", encoding="UTF-8")
+df = spark.read.csv(s3_files, header=True, sep=";", encoding="latin-1")
 
 # Transform
 df_final = df.select(
@@ -137,7 +137,7 @@ Resources:
       DatabaseName: !Ref DatabaseName
       TableInput:
         Name:
-          Fn::Sub: '${stg_encuestas}${DBDiscriminator}'
+          Fn::Sub: 'stg_encuestas${DBDiscriminator}'
         Description: !Sub "Stage ${AWS::StackName} <description>"
         TableType: EXTERNAL_TABLE
         Parameters:

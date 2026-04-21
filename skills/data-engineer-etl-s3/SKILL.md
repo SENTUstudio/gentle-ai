@@ -88,12 +88,10 @@ import awswrangler as wr
 
 # Configuration
 S3_FILE_PATTERN = "*.csv"
-S3_OUTPUT_PATH = f"s3://{BUCKET_STG}/<table_name>/"
-
-# Glue Catalog configuration
+S3_PREFIX = "Output/"
 GLUE_DATABASE = os.getenv("GLUE_DATABASE", "toyota_chile")
-# Encoding — should come from study-file output; defaults to latin-1 (Toyota Chile)
 ENCODING = os.getenv("ENCODING", "latin-1")
+GLUE_TABLE = os.getenv("GLUE_TABLE", "stg_encuestas")
 
 def clean_column_name(name: str) -> str:
     """Normalize column names: lowercase, underscores."""
@@ -129,10 +127,16 @@ def get_s3_whitelist(bucket: str, prefix: str, pattern: str, last_load: str) -> 
 # ============================================================================
 # INIT
 # ============================================================================
-args = getResolvedOptions(sys.argv, ["JOB_NAME", "BUCKET_RAW", "BUCKET_STG"])
+args = getResolvedOptions(sys.argv, [
+    "JOB_NAME", "BUCKET_RAW", "BUCKET_STG", "GLUE_DATABASE", "GLUE_TABLE"
+])
 BUCKET_RAW = args.get("BUCKET_RAW") or os.getenv("BUCKET_RAW", "toyota-chile-raw-data")
 BUCKET_STG = args.get("BUCKET_STG") or os.getenv("BUCKET_STG", "toyota-chile-refined")
-GLUE_TABLE = os.getenv("GLUE_TABLE", "stg_encuestas")
+GLUE_DATABASE = args.get("GLUE_DATABASE") or os.getenv("GLUE_DATABASE", "toyota_chile")
+GLUE_TABLE = args.get("GLUE_TABLE") or os.getenv("GLUE_TABLE", "stg_encuestas")
+
+# S3 output path — defined after BUCKET_STG is resolved
+S3_OUTPUT_PATH = f"s3://{BUCKET_STG}/<table_name>/"
 sc = SparkContext.getOrCreate()
 glueContext = GlueContext(sc)
 spark = glueContext.spark_session
