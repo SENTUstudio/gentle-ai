@@ -120,7 +120,7 @@ def detect_date_format(sample_values: list) -> str:
 import re
 
 CONTROL_CHARS = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f]')
-LEADING_BOM = re.compile(r'^\xef\xbb\xbf')
+LEADING_BOM = re.compile(r'^\ufeff')
 DOUBLE_ENCODED = re.compile(r'Ã¡|Ã©|Ã­|Ã³|Ãº|Ã±|Ã')
 
 def clean_value(value: str) -> str:
