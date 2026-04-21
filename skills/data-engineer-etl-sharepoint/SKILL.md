@@ -59,16 +59,16 @@ These MUST be set in Lambda environment or local .env:
 Use Graph API to get download URL, then read directly:
 
 ```python
-def get_item_download_url(headers: dict, hostname: str, site_name: str, item_path: str) -> str:
-    """Get pre-signed download URL for SharePoint item."""
-    # Encode path for URL safety
-    encoded_path = item_path.replace(" ", "%20").replace("/", "%2F")
-    url = f"https://graph.microsoft.com/v1.0/sites/{hostname}/drive/root:/{encoded_path}:/createUploadSession"
-    
-    response = requests.post(url, headers=headers)
-    # For download, use the @microsoft.graph.downloadUrl from driveItem
-    # Alternative: use /content endpoint for direct download
-    return response.json().get('id')  # Placeholder
+import urllib.parse
+
+def get_drive_item_download_url(headers: dict, hostname: str, site_id: str, item_path: str) -> str:
+    """Get pre-signed download URL for SharePoint item via driveItem metadata."""
+    encoded_path = urllib.parse.quote(item_path, safe='/')
+    url = f"https://graph.microsoft.com/v1.0/sites/{hostname},{site_id}/drive/root:/{encoded_path}"
+    response = requests.get(url, headers=headers)
+    response.raise_for_status()
+    drive_item = response.json()
+    return drive_item['@microsoft.graph.downloadUrl']
 ```
 
 ### Toyota Chile File Reading
