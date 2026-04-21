@@ -316,7 +316,7 @@ aws cloudformation deploy \
 ## Output
 
 The skill produces:
-- **Lambda function** at `artefactos/etl_from_sharepoint.py` — reference copy
+- **Lambda function** at `src/artefactos/etl_from_sharepoint.py` — reference copy
 - **Environment variables** configuration for Lambda
 - **Requirements**: msal, pandas, awswrangler, requests
 

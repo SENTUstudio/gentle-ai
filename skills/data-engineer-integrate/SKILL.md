@@ -25,7 +25,7 @@ metadata:
 1. PROJECT SETUP
    └── Create project structure in estudios/<project_name>/
        ├── config/dev.yaml, config/prd.yaml
-       └── artefactos/ folder
+       └── src/artefactos/ folder
 
 2. SOURCE ANALYSIS (runs data-engineer-study-file)
    └── Analyze all source files
@@ -35,7 +35,7 @@ metadata:
 3. SQL GENERATION (runs data-engineer-sql-from-logic)
    └── If no SQL provided by source system
        ├── Generate transformation SQL
-       └── Save to artefactos/<name>.sql
+       └── Save to src/artefactos/<name>.sql
 
 4. ETL SELECTION (triggers appropriate etl-* skill)
    ├── S3 source → data-engineer-etl-s3
@@ -86,7 +86,7 @@ When integrating multiple skills, follow this invocation order:
 
 2. **Second**: `data-engineer-sql-from-logic` if no SQL provided
    - Generate SQL for each transformation step
-   - Save to `artefactos/` folder
+   - Save to `src/artefactos/` folder
 
 3. **Third**: Select appropriate etl-* skill based on source type
    - S3 → `data-engineer-etl-s3`
@@ -205,7 +205,7 @@ source_analysis = [
 # Step 3: SQL generation (if needed)
 print("=== STEP 3: SQL Generation ===")
 # Run data-engineer-sql-from-logic for transformations
-# Output: artefactos/ventas_enriched.sql
+# Output: src/artefactos/ventas_enriched.sql
 
 # Step 4: ETL selection and generation
 print("=== STEP 4: ETL Generation ===")
@@ -273,7 +273,7 @@ with open('estudios/mi_proyecto/config/dev.yaml') as f:
 The skill produces:
 - **Complete project structure** in `estudios/<project_name>/`
 - **Config files** for dev and prd environments
-- **ETL scripts** in `artefactos/` (reference copies)
+- **ETL scripts** in `src/artefactos/` (reference copies)
 - **Glue Jobs** in CARGA repo
 - **Glue Tables** in INFRA repo
 - **Documentation** in `docs/` subdirectories

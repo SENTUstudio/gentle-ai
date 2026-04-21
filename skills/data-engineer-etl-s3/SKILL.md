@@ -238,7 +238,7 @@ aws s3 ls s3://toyota-chile-refined/<table_name>/
 ## Output
 
 The skill produces:
-- **ETL script** at `artefactos/etl_from_s3.py` — reference copy for documentation
+- **ETL script** at `src/artefactos/etl_from_s3.py` — reference copy for documentation
 - **Glue Job definition parameters** for `template.yaml` in INFRA repo
 - **Partition keys**: `year`, `month`, `day` added to output schema
 

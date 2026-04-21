@@ -260,7 +260,7 @@ aws athena start-query-execution \
 ## Output
 
 The skill produces:
-- **ETL script** at `artefactos/etl_from_glue.py` — reference copy
+- **ETL script** at `src/artefactos/etl_from_glue.py` — reference copy
 - **Glue Job definition parameters** for `template.yaml`
 - **Output path**: `s3://{BUCKET}/<table_name>/` partitioned or coalesced
 
