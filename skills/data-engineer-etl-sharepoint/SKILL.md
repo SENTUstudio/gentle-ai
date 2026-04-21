@@ -39,9 +39,9 @@ def get_access_token() -> str:
         client_credential=CLIENT_SECRET,
     )
     result = app.acquire_token_for_client(scopes=[SCOPE])
-    if "error" in result:
-        raise RuntimeError(f"Auth failed: {result.get('error_description', result['error'])}")
-    return result["access_token"]
+    token = result.get("access_token")
+    if not token:
+        raise RuntimeError(f"MSAL auth failed: {result.get('error_description', result.get('error', 'unknown'))}")
 ```
 
 ### ENV Variables Required
@@ -174,9 +174,10 @@ def get_access_token() -> str:
     result = app.acquire_token_for_client(
         scopes=["https://graph.microsoft.com/.default"]
     )
-    if "error" in result:
-        raise RuntimeError(f"Auth failed: {result.get('error_description', result['error'])}")
-    return result["access_token"]
+    token = result.get("access_token")
+    if not token:
+        raise RuntimeError(f"MSAL auth failed: {result.get('error_description', result.get('error', 'unknown'))}")
+    return token
 
 # ============================================================================
 # DOWNLOAD
