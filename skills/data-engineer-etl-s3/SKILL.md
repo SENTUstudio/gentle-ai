@@ -21,7 +21,17 @@ metadata:
 
 ### Incremental Watermark Pattern
 
-The watermark pattern prevents re-processing already-loaded data:
+The watermark pattern prevents re-processing already-loaded data. It requires a `<table>_metadata` table in Glue Catalog with a `last_load_timestamp` column. If this table does not exist, the watermark falls back to epoch (`1970-01-01`), processing all available files.
+
+**Required `_metadata` table DDL:**
+
+```sql
+CREATE EXTERNAL TABLE IF NOT EXISTS {database}.{table}_metadata (
+    last_load_timestamp TIMESTAMP
+)
+STORED AS PARQUET
+LOCATION 's3://{bucket}/{table}_metadata/'
+```
 
 ```
 1. get_last_load_timestamp(database, table) → last_load_time
