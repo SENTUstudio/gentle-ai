@@ -1,0 +1,31 @@
+# Toyota Chile ETL - Development Configuration
+
+# AWS Environment
+AWS_PROFILE: dev
+AWS_REGION: us-east-1
+
+# S3 Buckets (Development)
+BUCKET_RAW: infra-contac-dev-contactabilidad-usuario
+BUCKET_STG: infra-contac-dev-stg-encuestas
+
+# Glue Database (Development)
+GLUE_DATABASE: db_dl_dev_stg_encuestas
+GLUE_TABLE_PREFIX: dev_
+
+# SNS Topic (Development)
+TOPIC_SNS: arn:aws:sns:us-east-1:123456789:topic-dev-datalake
+
+# SharePoint (Development)
+TENANT_ID: dev-tenant-id
+CLIENT_ID: dev-client-id
+# CLIENT_SECRET: set via environment variable
+SHAREPOINT_HOSTNAME: devToyota.sharepoint.com
+SITE_NAME: dev-sitio-toyota
+FOLDER_PATH: /Input/Dev
+
+# Logging
+LOG_LEVEL: DEBUG
+VERBOSE: true
+
+# File Encoding (Toyota Chile sources use latin-1)
+ENCODING: latin-1

@@ -1,0 +1,58 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Glue table definition for stg_encuestas"
+
+Parameters:
+  Entorno:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prd
+  DBDiscriminator:
+    Type: String
+    Default: ""
+  DatabaseName:
+    Type: String
+    Default: db_dl_dev_stg_encuestas
+  BucketName:
+    Type: String
+    Default: infra-contac-dev-stg-encuestas
+
+Resources:
+  StgEncuestas:
+    Type: AWS::Glue::Table
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseName: !Ref DatabaseName
+      TableInput:
+        Name: !Sub "stg_encuestas${DBDiscriminator}"
+        Description: !Sub "Stage ${AWS::StackName} encuestas"
+        TableType: EXTERNAL_TABLE
+        Parameters:
+          classification: parquet
+          compressionType: snappy
+          parquet.compression: SNAPPY
+        StorageDescriptor:
+          Columns:
+            - Name: "id"
+              Type: "string"
+            - Name: "fecha"
+              Type: "timestamp"
+            - Name: "monto"
+              Type: "decimal(18,2)"
+            - Name: "region"
+              Type: "string"
+          Location: !Sub "s3://${BucketName}/stg_encuestas/"
+          InputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat
+          OutputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat
+          SerdeInfo:
+            SerializationLibrary: org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe
+            SerdeParameters:
+              serialization.format: "1"
+          PartitionKeys:
+            - Name: "year"
+              Type: "string"
+            - Name: "month"
+              Type: "string"
+            - Name: "day"
+              Type: "string"

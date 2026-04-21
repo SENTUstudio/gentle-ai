@@ -1,0 +1,31 @@
+# Toyota Chile ETL - Production Configuration
+
+# AWS Environment
+AWS_PROFILE: prd
+AWS_REGION: us-east-1
+
+# S3 Buckets (Production)
+BUCKET_RAW: infra-contac-prd-contactabilidad-usuario
+BUCKET_STG: infra-contac-prd-stg-encuestas
+
+# Glue Database (Production)
+GLUE_DATABASE: db_dl_prd_stg_encuestas
+GLUE_TABLE_PREFIX: ""
+
+# SNS Topic (Production)
+TOPIC_SNS: arn:aws:sns:us-east-1:123456789:topic-prd-datalake
+
+# SharePoint (Production)
+TENANT_ID: prd-tenant-id
+CLIENT_ID: prd-client-id
+# CLIENT_SECRET: set via environment variable
+SHAREPOINT_HOSTNAME: toyota.sharepoint.com
+SITE_NAME: sitio-toyota
+FOLDER_PATH: /Input/Prod
+
+# Logging
+LOG_LEVEL: INFO
+VERBOSE: false
+
+# File Encoding (Toyota Chile sources use latin-1)
+ENCODING: latin-1
