@@ -20,7 +20,7 @@ metadata:
 ## Critical Patterns
 
 ### Encoding Detection Order
-1. **UTF-8 first** — most common, check for BOM (`\xef\xbb\xbf`)
+1. **UTF-8 first** — most common, check for BOM (`\ufeff`)
 2. **Latin-1 / ISO-8859-1** — common for Spanish text (á, ñ, ü); same encoding but Latin-1 has looser validation
 3. **Windows-1252** — fallback for Western European text with characters like smart quotes
 4. **Auto-detect with chardet** — when manual inspection is inconclusive
