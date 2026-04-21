@@ -31,7 +31,7 @@ Use logical, descriptive names for each transformation step:
 ### SparkQL Compatibility
 **Glue uses Spark SQL, NOT Presto or PostgreSQL.**
 - Use `CAST(col AS INT)` not `col::int`
-- Use `FORMAT_TIMESTAMP()` not `TO_CHAR()`
+- Use `date_format()` not `TO_CHAR()`
 - Use `NVL()` or `COALESCE()` for null handling
 - Window functions: `ROW_NUMBER() OVER (PARTITION BY ... ORDER BY ...)` is standard
 
