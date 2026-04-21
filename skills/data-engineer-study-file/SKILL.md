@@ -21,8 +21,8 @@ metadata:
 
 ### Encoding Detection Order
 1. **UTF-8 first** — most common, check for BOM (`\xef\xbb\xbf`)
-2. **Latin-1 (ISO-8859-1)** — common for Spanish text (á, ñ, ü)
-3. **ISO-8859-1** — fallback if Latin-1 fails
+2. **Latin-1 / ISO-8859-1** — common for Spanish text (á, ñ, ü); same encoding but Latin-1 has looser validation
+3. **Windows-1252** — fallback for Western European text with characters like smart quotes
 4. **Auto-detect with chardet** — when manual inspection is inconclusive
 
 ### Delimiter Detection
