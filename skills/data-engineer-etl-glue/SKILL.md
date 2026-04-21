@@ -111,6 +111,8 @@ import sys
 from pyspark.context import SparkContext
 from awsglue.context import GlueContext
 from awsglue.dynamicframe import DynamicFrame
+from awsglue.job import Job
+from awsglue.utils import getResolvedOptions
 
 # Configuration
 DB_SOURCE = "toyota_chile_refined"
@@ -127,9 +129,12 @@ CATALOG_TABLES = [
 # ============================================================================
 # INIT
 # ============================================================================
+args = getResolvedOptions(sys.argv, ["JOB_NAME"])
 sc = SparkContext.getOrCreate()
 glueContext = GlueContext(sc)
 spark = glueContext.spark_session
+job = Job(glueContext)
+job.init(args["JOB_NAME"], args)
 
 # ============================================================================
 # READ FROM CATALOG
@@ -201,6 +206,11 @@ df_final = spark.sql(query)
 # ============================================================================
 df_final.printSchema()
 print("Schema extraction complete")
+
+# ============================================================================
+# COMMIT — Always call job.commit() before exiting
+# ============================================================================
+job.commit()
 ```
 
 ### Schema Extraction Output
