@@ -133,23 +133,17 @@ Resources:
   StgTableName:
     Type: AWS::Glue::Table
     Properties:
-      TableName:
-        Fn::Sub: '${table_name}${DBDiscriminator}'
       CatalogId: !Ref AWS::AccountId
       DatabaseName: !Ref DatabaseName
-      Type: EXTERNAL_TABLE
-      Description: "Stage {{AWS::StackName}} <description>"
-      Parameters:
-        classification: parquet
-        compressionType: snappy
-        parquet.compression: SNAPPY
       TableInput:
         Name:
           Fn::Sub: '${table_name}${DBDiscriminator}'
+        Description: !Sub "Stage ${AWS::StackName} <description>"
         TableType: EXTERNAL_TABLE
         Parameters:
           classification: parquet
           compressionType: snappy
+          parquet.compression: SNAPPY
         StorageDescriptor:
           Columns:
             - Name: "id"
