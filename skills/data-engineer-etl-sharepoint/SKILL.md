@@ -39,6 +39,8 @@ def get_access_token() -> str:
         client_credential=CLIENT_SECRET,
     )
     result = app.acquire_token_for_client(scopes=[SCOPE])
+    if "error" in result:
+        raise RuntimeError(f"Auth failed: {result.get('error_description', result['error'])}")
     return result["access_token"]
 ```
 
@@ -51,7 +53,8 @@ These MUST be set in Lambda environment or local .env:
 | `TENANT_ID` | Azure AD tenant ID |
 | `CLIENT_ID` | Service principal app ID |
 | `CLIENT_SECRET` | Service principal secret |
-| `SITE_NAME` | SharePoint site name |
+| `SITE_HOSTNAME` | SharePoint hostname (e.g. toyota.sharepoint.com) |
+| `SITE_PATH` | SharePoint site path (e.g. /sites/toyota-chile) |
 | `FOLDER_PATH` | Path to source folder in SharePoint |
 
 ### SharePoint File Download
@@ -129,7 +132,8 @@ import msal
 TENANT_ID = os.getenv("TENANT_ID")
 CLIENT_ID = os.getenv("CLIENT_ID")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET")
-SITE_NAME = os.getenv("SITE_NAME", "toyota-chile")
+SITE_HOSTNAME = os.getenv("SITE_HOSTNAME", "toyota.sharepoint.com")
+SITE_PATH = os.getenv("SITE_PATH", "/sites/toyota-chile")
 FOLDER_PATH = os.getenv("FOLDER_PATH", "/Shared Documents/ETL/Input")
 BUCKET = os.getenv("BUCKET", "toyota-chile-raw-data")
 
@@ -170,15 +174,29 @@ def get_access_token() -> str:
     result = app.acquire_token_for_client(
         scopes=["https://graph.microsoft.com/.default"]
     )
+    if "error" in result:
+        raise RuntimeError(f"Auth failed: {result.get('error_description', result['error'])}")
     return result["access_token"]
 
 # ============================================================================
 # DOWNLOAD
 # ============================================================================
-def get_drive_items(headers: dict, site_name: str, folder_path: str) -> list:
+import urllib.parse
+
+SITE_HOSTNAME = os.getenv("SITE_HOSTNAME", "toyota.sharepoint.com")
+SITE_PATH = os.getenv("SITE_PATH", "/sites/toyota-chile")
+
+def resolve_site_id(headers: dict, hostname: str, site_path: str) -> str:
+    """Resolve SharePoint site ID from hostname and path."""
+    url = f"https://graph.microsoft.com/v1.0/sites/{hostname}:{site_path}"
+    response = requests.get(url, headers=headers)
+    response.raise_for_status()
+    return response.json()["id"]
+
+def get_drive_items(headers: dict, site_id: str, folder_path: str) -> list:
     """List files in SharePoint folder."""
-    encoded_path = folder_path.replace(" ", "%20")
-    url = f"https://graph.microsoft.com/v1.0/sites/{site_name}/drive/root:/{encoded_path}:/children"
+    encoded_path = urllib.parse.quote(folder_path, safe='/')
+    url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drive/root:/{encoded_path}:/children"
     
     response = requests.get(url, headers=headers)
     items = response.json().get('value', [])
@@ -214,8 +232,11 @@ def lambda_handler(event, context):
     access_token = get_access_token()
     headers = {"Authorization": f"Bearer {access_token}"}
     
+    # Resolve site ID
+    site_id = resolve_site_id(headers, SITE_HOSTNAME, SITE_PATH)
+    
     # Get file list
-    items = get_drive_items(headers, SITE_NAME, FOLDER_PATH)
+    items = get_drive_items(headers, site_id, FOLDER_PATH)
     
     for item in items:
         nombre_archivo = item['name']
