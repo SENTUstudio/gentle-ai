@@ -35,7 +35,7 @@ env/
 
 # Jupyter
 .ipynb_checkpoints/
-*.ipynb
+!error_files.ipynb
 
 # Testing
 .pytest_cache/
