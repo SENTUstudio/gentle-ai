@@ -29,9 +29,11 @@ When configured, gentle-ai installs:
 gentle-ai uses **two signals** to detect Kiro:
 
 1. **`~/.kiro` directory presence** — used by `system.ScanConfigs` for the install/TUI auto-detection flow. If `~/.kiro` exists on disk, Kiro is shown as detected in the installer, regardless of whether the binary is on `PATH`.
-2. **`kiro` binary on `PATH`** — used by `adapter.Detect()` for the sync/upgrade flow and to confirm the IDE is actually runnable.
+2. **Binary on `PATH`** — used by `adapter.Detect()` for the sync/upgrade flow. Both `kiro` (IDE) and `kiro-cli` are supported; the IDE binary is tried first, with `kiro-cli` as fallback. Either one is sufficient for detection.
 
 In practice: **the installer detects Kiro from `~/.kiro`**, not from `PATH`. If you have Kiro installed but `~/.kiro` hasn't been created yet (e.g., before first launch), run Kiro once to initialize its config dir, then re-run `gentle-ai install`.
+
+> **`kiro-cli` users**: gentle-ai fully supports the CLI variant. Since both `kiro` and `kiro-cli` share the same `~/.kiro/` config root, all installed artifacts (skills, steering, agents, MCP config) work identically for both.
 
 ---
 

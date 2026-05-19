@@ -323,6 +323,61 @@ func TestAdapter_SupportsFeatures(t *testing.T) {
 	}
 }
 
+// TestAdapter_Detect_KiroCLIFallback verifies that kiro-cli is detected when
+// the "kiro" IDE binary is not on PATH but "kiro-cli" is.
+func TestAdapter_Detect_KiroCLIFallback(t *testing.T) {
+	home := t.TempDir()
+	adapter := &Adapter{
+		lookPath: func(name string) (string, error) {
+			if name == "kiro-cli" {
+				return "/usr/local/bin/kiro-cli", nil
+			}
+			return "", &mockLookPathError{}
+		},
+		statPath: os.Stat,
+	}
+
+	installed, binaryPath, _, _, err := adapter.Detect(nil, home)
+	if !installed {
+		t.Error("Detect() installed should be true when kiro-cli is on PATH")
+	}
+	if binaryPath != "/usr/local/bin/kiro-cli" {
+		t.Errorf("Detect() binaryPath = %q, want %q", binaryPath, "/usr/local/bin/kiro-cli")
+	}
+	if err != nil {
+		t.Errorf("Detect() unexpected error: %v", err)
+	}
+}
+
+// TestAdapter_Detect_KiroIDEWinsOverCLI verifies that when both binaries are
+// present, "kiro" (IDE) takes priority over "kiro-cli".
+func TestAdapter_Detect_KiroIDEWinsOverCLI(t *testing.T) {
+	home := t.TempDir()
+	adapter := &Adapter{
+		lookPath: func(name string) (string, error) {
+			switch name {
+			case "kiro":
+				return "/usr/local/bin/kiro", nil
+			case "kiro-cli":
+				return "/usr/local/bin/kiro-cli", nil
+			}
+			return "", &mockLookPathError{}
+		},
+		statPath: os.Stat,
+	}
+
+	installed, binaryPath, _, _, err := adapter.Detect(nil, home)
+	if !installed {
+		t.Error("Detect() installed should be true when both binaries are present")
+	}
+	if binaryPath != "/usr/local/bin/kiro" {
+		t.Errorf("Detect() binaryPath = %q, want IDE binary %q", binaryPath, "/usr/local/bin/kiro")
+	}
+	if err != nil {
+		t.Errorf("Detect() unexpected error: %v", err)
+	}
+}
+
 // TestAdapter_Detect_UnexpectedLookPathError verifies that unexpected lookPath
 // errors (not ErrNotFound) are surfaced as non-nil errors rather than silently
 // swallowed as "not installed".

@@ -37,33 +37,37 @@ func (a *Adapter) Tier() model.SupportTier {
 // --- Detection ---
 
 func (a *Adapter) Detect(_ context.Context, homeDir string) (bool, string, string, bool, error) {
-	// Kiro IDE is a VS Code fork available as a desktop application.
-	// Official website: https://kiro.dev/
+	// Kiro is available as a desktop IDE (https://kiro.dev/) and as a CLI tool (kiro-cli).
+	// Both share the same ~/.kiro config root, so gentle-ai artifacts work for either.
 	// Detection uses two signals:
-	//   1. "kiro" binary on PATH — primary indicator that Kiro is installed.
+	//   1. Binary on PATH — "kiro" (IDE) tried first, "kiro-cli" as fallback.
+	//      Order is canonical (IDE is the documented agent), but has no functional
+	//      impact since binaryPath is informational only (callers use _ for it).
 	//   2. ~/.kiro config dir — returned as configPath so callers/UI can
 	//      show the managed directory and configFound reflects filesystem reality.
-	//
-	// Note: configPath is ~/.kiro (the home-based root where all managed
-	// artifacts live), NOT GlobalConfigDir() which points to the OS app-config
-	// dir (%APPDATA%\kiro\User on Windows) used only for settings.json.
 	configPath := filepath.Join(homeDir, ".kiro")
 
-	binaryPath, err := a.lookPath("kiro")
+	binaryPath, err := a.detectBinary()
 	if err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
-			// Binary not found — Kiro is not installed.
 			return false, "", configPath, false, nil
 		}
-		// Unexpected error (permission / IO) — surface it so callers can distinguish.
 		return false, "", configPath, false, err
 	}
 
-	// Binary found — check whether the config dir already exists.
 	info, statErr := a.statPath(configPath)
 	configFound := statErr == nil && info.IsDir()
 
 	return true, binaryPath, configPath, configFound, nil
+}
+
+// detectBinary tries "kiro" (IDE) first, then "kiro-cli" as fallback.
+// Returns exec.ErrNotFound (wrapped) only when neither binary is on PATH.
+func (a *Adapter) detectBinary() (string, error) {
+	if path, err := a.lookPath("kiro"); err == nil {
+		return path, nil
+	}
+	return a.lookPath("kiro-cli")
 }
 
 // --- Installation ---
