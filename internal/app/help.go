@@ -22,6 +22,8 @@ COMMANDS
                Print native SDD phase status for orchestrators
   sdd-continue [change]
                Print native SDD dispatcher routing output
+  sdd-config [--json] [--detect] [--validate-repos]
+               Print domain config / detection / repo-path validation
   update       Check for available updates
   upgrade      Apply updates to managed tools
   restore      Restore a config backup

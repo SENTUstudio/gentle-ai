@@ -33,13 +33,13 @@ Chain strategy: stacked-to-main
 
 ## Phase 1: Detection + Config
 
-- [ ] 1.1 `internal/sddconfig/config.go` + `_test.go`: `Config`, `Repos`, `AWSProfiles`, `VerifyOpts`, `LoadConfig`.
-- [ ] 1.2 `internal/sddconfig/detect.go` + `_test.go`: `DetectDomain` (0.8/0.5 confidence).
-- [ ] 1.3 `internal/sddconfig/repos.go` + `_test.go`: `ValidateRepos`.
-- [ ] 1.4 `internal/sddconfig/profiles.go` + `_test.go`: `ResolveProfile`, `ScrubProfiles`.
-- [ ] 1.5 `internal/cli/sdd_config.go` + `_test.go`: `RunSDDConfig` (`--json`, `--detect`, `--validate-repos`).
-- [ ] 1.6 Wire `sdd-config` subcommand in `cmd/gentle-ai/main.go`.
-- [ ] 1.7 Patch `internal/assets/skills/sdd-init/SKILL.md`: preflight detect + confirm/override.
+- [x] 1.1 `internal/sddconfig/config.go` + `_test.go`: `Config`, `Repos`, `AWSProfiles`, `VerifyOpts`, `LoadConfig`.
+- [x] 1.2 `internal/sddconfig/detect.go` + `_test.go`: `DetectDomain` (0.8/0.5 confidence).
+- [x] 1.3 `internal/sddconfig/repos.go` + `_test.go`: `ValidateRepos`.
+- [x] 1.4 `internal/sddconfig/profiles.go` + `_test.go`: `ResolveProfile`, `ScrubProfiles`.
+- [x] 1.5 `internal/cli/sdd_config.go` + `_test.go`: `RunSDDConfig` (`--json`, `--detect`, `--validate-repos`).
+- [x] 1.6 Wire `sdd-config` subcommand in `cmd/gentle-ai/main.go`.
+- [x] 1.7 Patch `internal/assets/skills/sdd-init/SKILL.md`: preflight detect + confirm/override.
 
 ## Phase 2: Spec + Design Templates
 
