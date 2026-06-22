@@ -1,9 +1,60 @@
 # Verification Report: opencode-sdd-profiles
 
 **Change**: `opencode-sdd-profiles`
-**Date**: 2026-04-03
-**Mode**: Strict TDD (enabled in project config)
+**Date**: 2026-06-21 (warning investigation)
+**Mode**: Strict TDD (project config)
 **Spec source**: `openspec/changes/opencode-sdd-profiles/specs/`
+
+---
+
+## Investigation Scope
+
+The user explicitly chose to investigate the three warnings recorded in the previous verification report before archiving. This report re-examines each warning, records the evidence found in the current codebase, and gives a verdict for each.
+
+---
+
+## Warning Investigation Summary
+
+| # | Warning | Verdict | Evidence | Recommended Action |
+|---|---|---|---|---|
+| 1 | **R-PROF-31: Missing warning log when syncing profiles** | **REAL_ISSUE** | `internal/cli/sync.go` (ComponentSDD path, lines ~601-657) resolves profiles but never loads `~/.cache/opencode/models.json` or validates profile model IDs. No warning is emitted. Model preservation works by deep merge, but the spec's MUST-level warning is absent. | Implement the warning (load cache + warn on unknown model) or formally descope R-PROF-31 in the spec and tasks. |
+| 2 | **ScreenProfileCreate: Missing cache guard (task 6.2)** | **REAL_ISSUE** | `internal/tui/model.go` enters `ScreenProfileCreate` without checking the model cache. After the name step, `handleProfileNameInput` advances to step 1 even when the cache is missing, and `internal/tui/screens/model_picker.go:renderPhaseList` shows an empty-state message plus **"Continue with defaults"** and **"← Back"**. The spec scenario *"Model cache not available"* requires the message **and only a "Back" option**. | Add a cache-missing guard when entering `ScreenProfileCreate` (Back-only message) or update the spec/task to match the current "Continue with defaults" behavior. |
+| 3 | **tasks.md checkbox discrepancy** | **REAL_ISSUE** | `tasks.md` now shows **all 38 tasks checked**, but several checked items do not match the actual implementation: teatest-based tasks (3.3, 3.5, 4.1, 4.3) are render unit tests, task 6.1 (E2E test) does not exist, tasks 6.2 and 6.4 are partially/not implemented as specified, and task 6.6 is covered by string-assertion tests rather than snapshot tests. | Reconcile `tasks.md` with the actual implementation (uncheck or implement the missing/partial items). |
+
+### Detailed Evidence
+
+#### 1. R-PROF-31 — Missing sync-time model warning
+
+- **Spec**: `specs/sdd-profile-sync/spec.md`, Requirement *Missing Model Warning*:
+  > "If a profile sub-agent references a model that no longer exists in `~/.cache/opencode/models.json`, sync MUST emit a warning and preserve the existing model assignment."
+- **Implementation path**: `internal/cli/sync.go` `componentSyncStep.Run()` for `model.ComponentSDD`.
+- **Observation**: The code calls `sdd.DetectProfiles` or uses explicit profiles, then passes them to `sdd.Inject`. It never reads the model cache (`opencode.LoadModels` / `LoadModelsOrEmpty`) and never validates whether an assigned model ID exists. There is no `fmt.Fprintf(os.Stderr, "WARNING: ...")` or equivalent.
+- **Conclusion**: The warning is genuinely missing. The behavior is non-fatal and preserves models, but it does not satisfy the spec's MUST.
+
+#### 2. ScreenProfileCreate — Missing cache guard
+
+- **Spec**: `specs/sdd-profiles/spec.md`, Scenario *Model cache not available*:
+  > "GIVEN `~/.cache/opencode/models.json` does not exist ... THEN a message 'Run OpenCode at least once to populate the model cache' is shown AND only a 'Back' option is available."
+- **Task 6.2**: "Handle missing OpenCode model cache edge case in `ScreenProfileCreate`: if `~/.cache/opencode/models.json` does not exist, show ... message and only offer 'Back'."
+- **Implementation paths**:
+  - `internal/tui/model.go` lines 1388-1397 (`n` key) and 1722-1732 (`Create new profile` enter) transition to `ScreenProfileCreate` without checking the cache.
+  - `internal/tui/model.go` `handleProfileNameInput` (lines 3861-3868) advances to step 1 with an empty `ModelPickerState` when the cache is missing.
+  - `internal/tui/screens/model_picker.go:renderPhaseList` (lines 680-695) renders the empty-state message and offers **"Continue with defaults"** plus **"← Back"**.
+- **Conclusion**: The user can still create a profile with default assignments when the cache is missing. This contradicts the spec's "Back only" requirement and makes task 6.2 overchecked.
+
+#### 3. tasks.md — Checkbox accuracy
+
+- Current `tasks.md` marks **all 38 tasks `[x]`**.
+- Verified mismatches:
+  - **3.3** `[x]` "Write teatest test for `ScreenProfiles` ..." — `internal/tui/screens/profiles_test.go` contains render/unit tests, no `teatest` import or message-loop tests.
+  - **3.5** `[x]` "Write teatest test for `ScreenProfileCreate` step flow ..." — `internal/tui/screens/profile_create_test.go` contains render/unit tests, no `teatest`.
+  - **4.1** `[x]` "Write teatest test for edit flow ..." — same file, no `teatest`.
+  - **4.3** `[x]` "Write teatest test for `ScreenProfileDelete` ..." — `internal/tui/screens/profile_delete_test.go` contains render/unit tests, no `teatest`.
+  - **6.1** `[x]` "E2E: profile creation, sync, list display, edit, re-sync, delete ..." — no E2E test file exists for this change.
+  - **6.2** `[x]` "Handle missing OpenCode model cache edge case ... only offer 'Back'" — implemented as empty-state "Continue with defaults" path, not Back-only.
+  - **6.4** `[x]` "Handle sync-time missing model warning (R-PROF-31) ..." — warning not implemented.
+  - **6.6** `[x]` "TUI snapshot tests for welcome screen ..." — `internal/tui/screens/welcome_test.go` has string-assertion unit tests, not snapshot/golden tests.
+- **Conclusion**: The task list is currently **overchecked**. It claims test coverage and edge-case behavior that are not present in the codebase.
 
 ---
 
@@ -12,212 +63,113 @@
 | Metric | Value |
 |--------|-------|
 | Tasks total | 38 |
-| Tasks marked complete `[x]` | 5 (Phase 5 only) |
-| Tasks marked incomplete `[ ]` | 33 |
-| Tasks actually implemented | 38 |
+| Tasks marked complete `[x]` | 38 |
+| Tasks with verified implementation | ~30 (core feature + most unit tests) |
+| Tasks overchecked / not as specified | 8 (3.3, 3.5, 4.1, 4.3, 6.1, 6.2, 6.4, 6.6) |
 
-> **Note**: The `tasks.md` file was not kept up to date during implementation. 33 tasks still show `[ ]` but the code, tests, and build confirm ALL of them are implemented. This is a documentation gap, not a code gap.
-
-### Incomplete Task Markers (documentation debt):
-- All of Phases 1, 2, 3, 4, 6 show `[ ]` in tasks.md despite being fully implemented and tested.
+> The previous report noted that tasks were under-checked but implemented. The current `tasks.md` has swung the other way: it is now overchecked relative to actual test coverage and edge-case implementation.
 
 ---
 
 ## Build & Tests Execution
 
 **Build**: ✅ Passed
-```
+```text
 go build ./...
 # No output — clean build, zero errors
 ```
 
-**Tests**: ✅ 37 packages pass / ❌ 0 failed / ⚠️ 0 skipped
-```
-ok  github.com/gentleman-programming/gentle-ai/internal/components/sdd   13.718s
-ok  github.com/gentleman-programming/gentle-ai/internal/tui/screens      0.077s
-ok  github.com/gentleman-programming/gentle-ai/internal/tui              2.244s
-ok  github.com/gentleman-programming/gentle-ai/internal/cli              28.899s
-ok  github.com/gentleman-programming/gentle-ai/internal/model            0.147s
-# All 37 packages pass; 0 failures
+**Targeted tests** (profile + sync paths): ✅ Passed
+```text
+go test ./internal/components/sdd/... ./internal/tui/... ./internal/tui/screens/... ./internal/cli/ -run 'Profile|Sync'
+ok  	github.com/gentleman-programming/gentle-ai/internal/components/sdd	5.448s
+ok  	github.com/gentleman-programming/gentle-ai/internal/tui	0.951s
+ok  	github.com/gentleman-programming/gentle-ai/internal/tui/screens	1.277s
+ok  	github.com/gentleman-programming/gentle-ai/internal/cli	18.408s
 ```
 
-**Coverage**: Not measured (tool not configured), but all spec scenarios have corresponding tests.
+**Full suite** (`go test ./...`): ❌ One unrelated failure in `internal/cli`
+```text
+--- FAIL: TestRunInstallKimiMissingUVFailsBeforeExecutingInstallCommands (0.13s)
+    run_integration_test.go:2154: RunInstall() expected error when Kimi uv preflight fails
+```
+This failure is in the Kimi install preflight path and is not related to the SDD profiles change. The profile/sync code paths pass.
+
+**Coverage**: Not measured (tool not configured).
 
 ---
 
-## Spec Compliance Matrix
-
-### Spec: sdd-profiles
-
-| Requirement | Scenario | Test | Result |
-|-------------|----------|------|--------|
-| Profile Data Model | Profile creation with explicit phase models | `profiles_test.go > TestDetectProfiles_SingleProfile` | ✅ COMPLIANT |
-| Profile Data Model | Sub-agent model inheritance | `profiles_test.go > TestGenerateProfileOverlay_Structure` | ✅ COMPLIANT |
-| Profile Name Validation | Spaces rejected during creation | `profiles_test.go > TestValidateProfileName_Invalid` | ✅ COMPLIANT |
-| Profile Name Validation | Reserved name rejected | `profiles_test.go > TestValidateProfileName_Invalid` | ✅ COMPLIANT |
-| Profile Name Validation | Input auto-lowercased | `model.go > handleProfileNameInput` (auto-lowercase in name input handler) | ⚠️ PARTIAL (logic present, no dedicated unit test for TUI auto-lowercase) |
-| Agent Generation — Naming | Profile `cheap` generates correct 11 keys | `profiles_test.go > TestProfileAgentKeys_Named`, `TestProfileAgentKeys_Count` | ✅ COMPLIANT |
-| Agent JSON Structure | Orchestrator mode:primary, permission scoped | `profiles_test.go > TestGenerateProfileOverlay_Structure`, `TestGenerateProfileOverlay_PermissionScoped` | ✅ COMPLIANT |
-| Agent JSON Structure | Sub-agent prompt uses shared file reference | `profiles_test.go > TestGenerateProfileOverlay_SubAgentFileRefs` | ✅ COMPLIANT |
-| Orchestrator Prompt Inlining | Orchestrator references correct suffixed sub-agents | `profiles_test.go > TestGenerateProfileOverlay_OrchestratorPromptSuffixed` | ✅ COMPLIANT |
-| Shared Prompt Files | 10 files written on first sync | `prompts_test.go > TestWriteSharedPromptFilesCreates10Files` | ✅ COMPLIANT |
-| Shared Prompt Files | Idempotent (no change on second call) | `prompts_test.go > TestWriteSharedPromptFilesIdempotent` | ✅ COMPLIANT |
-| Shared Prompt Files | Prompt files survive profile deletion | `profiles_lifecycle_test.go > TestProfileLifecycle_FullCRUD` (step 9) | ✅ COMPLIANT |
-| Shared Prompt Files | Sub-agent prompt files use `{file:...}` refs | `prompts_test.go > TestInjectOpenCodeMultiModeSubagentPromptsUseFilePaths` | ✅ COMPLIANT |
-| Profile Detection | Detect profiles on startup | `profiles_test.go > TestDetectProfiles_SingleProfile`, `TestDetectProfiles_TwoProfiles` | ✅ COMPLIANT |
-| Profile Detection | Missing file handled gracefully | `profiles_test.go > TestDetectProfiles_MissingFile` | ✅ COMPLIANT |
-| Profile Detection | Default-only returns empty list | `profiles_test.go > TestDetectProfiles_DefaultOnly` | ✅ COMPLIANT |
-| Profile CRUD — Create | Successful profile creation (11 keys + sync) | `profiles_lifecycle_test.go > TestProfileLifecycle_FullCRUD` | ✅ COMPLIANT |
-| Profile CRUD — Create | Duplicate name — overwrite prompt | `model.go > handleProfileNameInput (ProfileNameCollision)` | ⚠️ PARTIAL (logic present, no teatest integration test) |
-| Profile CRUD — Edit | Edit flow pre-populates current models | `profile_create_test.go > TestRenderProfileCreate_EditMode_ShowsEditHeader` | ✅ COMPLIANT |
-| Profile CRUD — Edit | Default profile editable | `model.go > confirmSelection (ScreenProfiles cursor=0)` | ⚠️ PARTIAL (routing logic present, no dedicated test) |
-| Profile CRUD — Delete | Delete removes all 11 agents atomically | `profiles_test.go > TestRemoveProfileAgents_RemovesExactly11` | ✅ COMPLIANT |
-| Profile CRUD — Delete | Delete blocked for default profile | `profiles_test.go > TestRemoveProfileAgents_CannotRemoveDefault` + TUI guard in `model.go` | ✅ COMPLIANT |
-| Profile CRUD — Delete | Shared prompt files not deleted with profile | `profiles_lifecycle_test.go > TestProfileLifecycle_FullCRUD` (step 9) | ✅ COMPLIANT |
-| TUI — Profile List Screen | List renders with correct keybinding hints | `screens/profiles_test.go > TestRenderProfiles_ShowsKeybindingHints` | ✅ COMPLIANT |
-| TUI — Profile List Screen | All profiles shown with models | `screens/profiles_test.go > TestRenderProfiles_ShowsProfileNamesWithProviderModel` | ✅ COMPLIANT |
-| TUI — Profile Create | Name input shows validation rules | `screens/profile_create_test.go > TestRenderProfileCreate_Step0_ShowsValidationRules` | ✅ COMPLIANT |
-| TUI — Profile Create | Validation error shown inline | `screens/profile_create_test.go > TestRenderProfileCreate_Step0_ShowsValidationError` | ✅ COMPLIANT |
-| TUI — Profile Create | Model cache not available handled | `model_picker.go > RenderModelPicker` (empty state message) | ⚠️ PARTIAL (reuses ModelPicker empty state, no profile-specific "Back only" restriction) |
-| CLI `--profile` Flag | Headless profile creation via `--profile` | `cli/sync_test.go > TestRunSyncWithProfilesIntegration` | ✅ COMPLIANT |
-| CLI `--profile` Flag | Multiple profiles in one sync | `cli/sync_test.go > TestParseSyncFlagsProfileMultiple` | ✅ COMPLIANT |
-| CLI `--profile` Flag | Invalid format rejected | `cli/sync_test.go > TestParseSyncFlagsProfileInvalidFormatReturnsError` | ✅ COMPLIANT |
+## Spec Compliance Matrix (relevant rows)
 
 ### Spec: sdd-profile-sync
 
 | Requirement | Scenario | Test | Result |
 |-------------|----------|------|--------|
-| Profile Detection During Sync | Sync detects and updates existing profiles | `cli/sync_test.go > TestRunSyncDetectsExistingProfilesOnRegularSync` | ✅ COMPLIANT |
-| Shared Prompt File Maintenance | Prompt files updated on sync | `prompts_test.go > TestWriteSharedPromptFilesCreates10Files` | ✅ COMPLIANT |
-| Shared Prompt File Maintenance | Idempotent sync — no changes | `prompts_test.go > TestInjectOpenCodeMultiModeIdempotentWithPromptFiles` | ✅ COMPLIANT |
-| Per-Profile Orchestrator Regeneration | Orchestrator prompt regenerated, model preserved | `profiles_lifecycle_test.go > TestProfileLifecycle_FullCRUD` (edit step) | ✅ COMPLIANT |
-| Model Preservation During Sync | Model not overwritten during sync | `profiles_lifecycle_test.go > TestProfileLifecycle_FullCRUD` | ✅ COMPLIANT |
-| Missing Model Warning | Stale model ID preserved with warning | None found | ❌ UNTESTED |
-| Backup Coverage | Prompt files backed up before sync | `cli/run.go > componentPaths (lines 825-835)` — path added but not tested | ⚠️ PARTIAL |
-| Sync Idempotency | Re-sync is a no-op (`filesChanged=0`) | `prompts_test.go > TestInjectOpenCodeMultiModeIdempotentWithPromptFiles` | ✅ COMPLIANT |
-| New Phase Sub-agents Added | New phase added to existing profile | `cli/sync_test.go > TestRunSyncDetectsExistingProfilesOnRegularSync` | ⚠️ PARTIAL (general sync tested, specific new-phase scenario not explicitly covered) |
+| Missing Model Warning | Stale model ID preserved with warning | None found | ❌ UNTESTED / MISSING WARNING |
 
-### Spec: gga (Welcome Screen + CLI)
+### Spec: sdd-profiles
 
 | Requirement | Scenario | Test | Result |
 |-------------|----------|------|--------|
-| Welcome Screen — Option present | Shows profile count badge for 2 profiles | `screens/welcome_test.go > TestWelcomeOptions_WithProfiles_CountTwo` | ✅ COMPLIANT |
-| Welcome Screen — No badge | No badge when no named profiles | `screens/welcome_test.go > TestWelcomeOptions_WithProfiles_ZeroCount` | ✅ COMPLIANT |
-| Welcome Screen — Navigation | Selecting option navigates to ScreenProfiles | `model.go > confirmSelection (case 5, hasDetectedOpenCode)` | ⚠️ PARTIAL (logic present, no teatest integration test for this navigation) |
-| Welcome Screen — Position | Profile option between "Configure Models" and "Manage Backups" | `screens/welcome_test.go > TestWelcomeOptions_ProfilesInsertedBeforeManageBackups` | ✅ COMPLIANT |
-| Welcome Screen — Conditional | Only shown when OpenCode is installed | `model.go > View (m.hasDetectedOpenCode())` | ⚠️ PARTIAL (logic present, no test for hidden state when OpenCode absent) |
-| CLI `--profile` creates profile | `cheap` not existing → created after sync | `cli/sync_test.go > TestRunSyncWithProfilesIntegration` | ✅ COMPLIANT |
-| CLI `--profile` invalid format | Exits with usage error | `cli/sync_test.go > TestParseSyncFlagsProfileInvalidFormatReturnsError` | ✅ COMPLIANT |
-| CLI `--profile-phase` overrides sub-agent | `cheap:sdd-apply` gets sonnet, others haiku | `cli/sync_test.go > TestParseSyncFlagsProfilePhaseAssignment` | ✅ COMPLIANT |
+| TUI — Profile Create Screen | Model cache not available | `model_picker.go > renderPhaseList` empty state | ⚠️ PARTIAL (message shown, but "Continue with defaults" offered instead of Back only) |
 
-**Compliance summary**: 34/42 scenarios fully compliant, 6 partial, 1 untested, 1 failing
+**Compliance summary**: The core CRUD, agent generation, shared prompts, CLI flags, and sync integration scenarios remain compliant. The two warnings above are the remaining spec gaps.
 
 ---
 
-## Correctness (Static — Structural Evidence)
+## Correctness (Static — Relevant Updates)
 
 | Requirement | Status | Notes |
 |------------|--------|-------|
-| `Profile` struct in `model.Profile` | ✅ Implemented | `internal/model/types.go:116-120` |
-| `Profiles []Profile` in `SyncOverrides` | ✅ Implemented | `internal/model/selection.go:47` |
-| `Profiles []Profile` in `Selection` | ✅ Implemented | `internal/model/selection.go:13` |
-| `ValidateProfileName` | ✅ Implemented | `internal/components/sdd/profiles.go:31-42` |
-| `ProfileAgentKeys` (11 keys) | ✅ Implemented | `internal/components/sdd/profiles.go:62-74` |
-| `DetectProfiles` | ✅ Implemented | `internal/components/sdd/profiles.go:80-150` |
-| `GenerateProfileOverlay` | ✅ Implemented | `internal/components/sdd/profiles.go:185-273` |
-| `RemoveProfileAgents` | ✅ Implemented | `internal/components/sdd/profiles.go:398-439` |
-| `WriteSharedPromptFiles` | ✅ Implemented | `internal/components/sdd/prompts.go:56-78` |
-| `SharedPromptDir` | ✅ Implemented | `internal/components/sdd/prompts.go:11-13` |
-| `ReadCurrentProfiles` wrapper | ✅ Implemented | `internal/components/sdd/read_assignments.go:29-31` |
-| Inject iterates profiles | ✅ Implemented | `internal/components/sdd/inject.go:358-372` |
-| Post-check for profile orchestrators | ✅ Implemented | `internal/components/sdd/inject.go:566-580` |
-| Overlay uses `__PROMPT_FILE_*__` placeholders | ✅ Implemented | `internal/assets/opencode/sdd-overlay-multi.json` |
-| Sub-agent prompts → `{file:...}` references | ✅ Implemented | `internal/components/sdd/inject.go:602-654` |
-| `ScreenProfiles`, `ScreenProfileCreate`, `ScreenProfileDelete` constants | ✅ Implemented | `internal/tui/model.go:144-146` |
-| `ProfileList`, `ProfileDraft`, `ProfileDeleteTarget` state fields | ✅ Implemented | `internal/tui/model.go:270-279` |
-| `ProfileNameCollision` guard (overwrite prompt) | ✅ Implemented | `internal/tui/model.go:278, 2031-2038` |
-| Routes for 3 new screens | ✅ Implemented | `internal/tui/router.go:33-35` |
-| `RenderProfiles` | ✅ Implemented | `internal/tui/screens/profiles.go` |
-| `RenderProfileCreate` (4-step, create+edit) | ✅ Implemented | `internal/tui/screens/profile_create.go` |
-| `RenderProfileDelete` | ✅ Implemented | `internal/tui/screens/profile_delete.go` |
-| Welcome screen: profile option + badge | ✅ Implemented | `internal/tui/screens/welcome.go` |
-| CLI `--profile` / `--profile-phase` flags | ✅ Implemented | `internal/cli/sync.go:79-97` |
-| Profiles forwarded through `BuildSyncSelection` | ✅ Implemented | `internal/cli/sync.go:267` |
-| `SDD` sync step detects profiles on regular sync | ✅ Implemented | `internal/cli/sync.go:454-469` |
-| Backup targets include prompt dir (run.go) | ✅ Implemented | `internal/cli/run.go:825-835` |
-| Missing model cache handled in profile create | ⚠️ Partial | Reuses existing ModelPicker empty-state logic; spec says show "Back only" but current behaviour shows ModelPicker with empty-state message (functionally equivalent but not exactly spec'd) |
-| Missing model warning during sync (R-PROF-31) | ❌ Missing | No warning emitted; sync silently preserves the existing model but does not log a warning |
+| Missing model warning during sync (R-PROF-31) | ❌ Missing | No model-cache load or validation in `internal/cli/sync.go` ComponentSDD path. |
+| Missing model cache guard in `ScreenProfileCreate` | ⚠️ Partial | Empty-state message exists, but spec requires Back-only option. |
+| Task tracking integrity | ❌ Overchecked | `tasks.md` claims teatest/E2E coverage and edge-case behavior not present. |
 
 ---
 
-## Coherence (Design)
+## Strict TDD Compliance (additional observation)
 
-| Decision | Followed? | Notes |
-|----------|-----------|-------|
-| `opencode.json` as single source of truth | ✅ Yes | `DetectProfiles` scans agent keys; no separate state file |
-| Orchestrator prompt inlined per-profile | ✅ Yes | `buildProfileOrchestratorPrompt` inlines per profile |
-| Sub-agent prompts via `{file:...}` shared files | ✅ Yes | `GenerateProfileOverlay` uses `{file:...}` refs |
-| `Profile` struct in `model` package | ✅ Yes | `internal/model/types.go` |
-| Absolute path for `{file:...}` (not `~`) | ✅ Yes | `SharedPromptDir` uses absolute path |
-| Profile CRUD in `profiles.go` (pure functions) | ✅ Yes | All CRUD functions in `internal/components/sdd/profiles.go` |
-| Profile creation data flow (TUI → SyncOverrides → Inject) | ✅ Yes | `confirmProfileCreate` → `SyncOverrides{Profiles: ...}` → `sdd.Inject` |
-| Profile deletion data flow (TUI → RemoveProfileAgents → sync) | ✅ Yes | `model.go:855` calls `RemoveProfileAgents` then sync |
-| Backup targets include prompt dir | ✅ Yes | `run.go:825-835` (but conditioned on `SDDModeMulti` only) |
+| Check | Result | Details |
+|-------|--------|---------|
+| TDD Evidence reported | ❌ | `apply-progress.md` does not exist for this change; no TDD Cycle Evidence table available. |
+| Existing tests pass | ✅ | All profile/sync-related tests pass (targeted run). |
+| Assertion quality | ✅ | No tautologies or ghost loops observed in profile-related tests. |
+
+The missing `apply-progress.md` is an audit-trail gap. It does not block the feature from working, but it means the strict-TDD paper trail cannot be validated for this change.
 
 ---
 
 ## Issues Found
 
-### CRITICAL (must fix before archive):
-**None.** Build is clean, all tests pass, all spec-critical behaviors are implemented.
+### CRITICAL
+**None.** The feature is functionally complete and the targeted tests pass. The issues below are spec/audit gaps, not runtime failures.
 
-### WARNING (should fix):
+### WARNING (investigated)
 
-1. **Task tracking not updated**: `tasks.md` shows 33 of 38 tasks as `[ ]`. All are implemented and tested. Update the checkboxes before archiving to maintain audit trail integrity.
+1. **R-PROF-31 missing sync-time model warning** — **REAL_ISSUE**. Spec MUST is not implemented. A warning should be emitted when a profile sub-agent references a model missing from the OpenCode cache.
+2. **ScreenProfileCreate missing cache guard** — **REAL_ISSUE**. The spec requires a Back-only message when the model cache is missing; the current screen allows "Continue with defaults".
+3. **tasks.md overchecked** — **REAL_ISSUE**. Several checked tasks do not match the actual implementation (missing teatest/E2E coverage, partial edge-case handling).
 
-2. **Missing sync-time model warning (R-PROF-31)**: Spec requires: *"if profile sub-agent model not found in OpenCode model cache, log warning and preserve existing assignment."* The model is preserved (deep merge wins) but no warning is logged. The spec says this MUST NOT be a hard error — which is correct — but the warning is missing.
-   - **File**: `internal/cli/sync.go` (`componentSyncStep.Run` for `ComponentSDD`)
-   - **Impact**: Low — users won't know their model IDs are stale
-
-3. **No test for "sync with missing model ID logs warning"**: The UNTESTED scenario in the compliance matrix. Belongs to `TestRunSyncDetectsExistingProfilesOnRegularSync` or a new test.
-
-4. **`ScreenProfileCreate` with missing model cache**: Spec says *"only offer 'Back'"* but the screen currently shows the ModelPicker with an empty-state warning message (from existing ModelPicker logic). Functionally similar but not exactly spec-compliant — the user can still press Continue with no model selected. Task 6.2 was not implemented as specified.
-   - **File**: `internal/tui/model.go`, `handleProfileNameInput` (step 1 init) — needs guard to prevent entering step 1 when cache absent
-
-### SUGGESTION (nice to have):
-
-1. **TUI integration tests (teatest) are missing**: Tasks 3.3, 3.5, 4.1, 4.3 specified teatest-based tests for full TUI navigation flows (j/k navigation, `d` delete guard on default, full step-through creation). The current tests are renderer unit tests (output strings), not full message-loop tests. The renderer tests cover correctness well, but the TUI state machine (Update/key handling) is tested only in `model_test.go` at a coarser level.
-
-2. **`✦` default marker for default profile**: The spec says the default profile `sdd-orchestrator` should be shown in the list with a `✦` marker. However, `DetectProfiles` intentionally EXCLUDES the default profile from the list (the default is always present implicitly). The UI shows only named profiles + "Create new profile" + "Back". This design decision (showing named profiles only, not the default) is valid per the design doc's data flow, but deviates from the spec's *"List renders with ✦ for default"* scenario. The spec scenario was not implemented — the default is not shown in the list at all.
-
-3. **`d` key on default profile no-op**: The guard in `model.go` (line 693) checks `m.Cursor < len(m.ProfileList)` which will only be true for named profiles (not the "Create new profile" / "Back" items). Since the default profile is never in `ProfileList`, this guard works correctly by consequence, but it's implicit. A comment or explicit test would help.
-
-4. **E2E test (task 6.1)**: Not implemented. A full Docker E2E test verifying profile creation, sync, edit, delete with real `opencode.json` file changes was listed but not created.
-
----
-
-## Summary Table
-
-| Category | Status |
-|----------|--------|
-| Build | ✅ Clean |
-| Unit tests | ✅ All pass |
-| Integration tests | ✅ All pass |
-| Spec compliance | 34/42 scenarios |
-| Design coherence | ✅ All decisions followed |
-| Task tracking | ⚠️ Not updated (33 tasks show `[ ]`) |
+### SUGGESTION
+- Add a `Warnings []string` field to `SyncResult` so missing-model warnings can be tested via `RenderSyncReport`, not only observed on stderr.
+- If teatest/E2E coverage is intentionally out of scope, record the explicit descope in `tasks.md` and the spec, rather than leaving checked boxes for unimplemented work.
 
 ---
 
 ## Verdict
 
-### ✅ PASS WITH WARNINGS
+### ❌ FAIL — DO NOT ARCHIVE WITHOUT FIX OR FORMAL DESCOPE
 
-The implementation is feature-complete, builds cleanly, and all 37 test packages pass. All critical spec behaviors (profile CRUD, agent generation, shared prompts, CLI flags, sync integration, TUI rendering) are implemented and tested.
+The implementation is feature-complete, builds cleanly, and all profile/sync-related tests pass. However, the three investigated warnings are **real issues**, not acceptable descopes:
 
-**Before archiving, address:**
-1. (**WARNING**) Update `tasks.md` to check off all completed tasks
-2. (**WARNING**) Implement missing model warning (R-PROF-31) or explicitly descope it
-3. (**WARNING**) Fix `ScreenProfileCreate` missing-cache guard (task 6.2) or explicitly descope it
+1. **R-PROF-31** is a spec non-compliance (MUST-level warning missing).
+2. **Task 6.2** is a spec non-compliance (cache-missing screen allows Continue instead of Back only).
+3. **tasks.md** is currently overchecked, which corrupts the audit trail.
 
-The codebase is ready for use. The warnings are improvements, not blockers for the feature to work correctly.
+Archiving now would record the change as fully complete when it is not. Either fix the two code gaps and reconcile `tasks.md`, or formally descope R-PROF-31 and the Back-only cache guard in the spec/tasks and update the checkboxes honestly.
+
+---
+
+## Next Recommended Phase
+
+**`sdd-apply`** — implement the R-PROF-31 warning, add the ScreenProfileCreate cache-missing guard, and reconcile `tasks.md`. Then re-run `sdd-verify` before archiving.
