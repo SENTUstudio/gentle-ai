@@ -174,7 +174,10 @@ func ProfileCreateOptionCount(step int, picker ModelPickerState) int {
 		return 0 // text input mode
 	case 1:
 		if len(picker.AvailableIDs) == 0 {
-			return 2 // "Continue with defaults" + "Back"
+			// Spec (task 6.2): when the model cache is missing, the profile
+			// create model step offers ONLY "Back" — the user cannot proceed
+			// without models to assign.
+			return 1 // "Back" only
 		}
 		return len(ModelPickerRowsForProfile()) + 2 // rows + Continue + Back
 	default:

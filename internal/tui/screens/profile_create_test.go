@@ -170,11 +170,39 @@ func TestProfileCreateOptionCount_Step1IncludesJDRows(t *testing.T) {
 	}
 }
 
-func TestProfileCreateOptionCount_Step1EmptyProvidersIncludesContinueAndBack(t *testing.T) {
+func TestProfileCreateOptionCount_Step1CacheMissingReturnsOne(t *testing.T) {
 	picker := screens.ModelPickerState{}
 	count := screens.ProfileCreateOptionCount(1, picker)
 
-	if count != 2 {
-		t.Errorf("expected option count 2 for empty-provider profile step (Continue with defaults + Back), got %d", count)
+	// Spec (task 6.2): when the model cache is missing, the profile create
+	// model step must offer ONLY "Back" (option count 1), not "Continue with
+	// defaults" + "Back" (count 2).
+	if count != 1 {
+		t.Errorf("expected option count 1 for cache-missing profile step (Back only), got %d", count)
+	}
+}
+
+// ─── Task 6.2: Cache-missing guard (Back only) ──────────────────────────────
+
+// TestRenderProfileCreate_Step1_CacheMissing_ShowsOnlyBack verifies the spec
+// scenario "Model cache not available": the profile create model step shows the
+// cache-missing message and ONLY a "Back" option — "Continue with defaults"
+// must NOT appear.
+func TestRenderProfileCreate_Step1_CacheMissing_ShowsOnlyBack(t *testing.T) {
+	draft := model.Profile{Name: "cheap"}
+	picker := screens.ModelPickerState{ForProfile: true} // AvailableIDs empty = cache missing
+
+	output := screens.RenderProfileCreate(1, draft, "", 0, "", false, nil, picker, 0)
+
+	// Spec message: "Run OpenCode at least once to populate the model cache"
+	if !strings.Contains(output, "Run OpenCode at least once") {
+		t.Errorf("expected cache-missing message in output, got:\n%s", output)
+	}
+	// Only "Back" must be available — "Continue with defaults" is forbidden.
+	if strings.Contains(output, "Continue with defaults") {
+		t.Errorf("cache-missing profile step must NOT offer 'Continue with defaults'; got:\n%s", output)
+	}
+	if !strings.Contains(output, "Back") {
+		t.Errorf("expected 'Back' option in cache-missing output, got:\n%s", output)
 	}
 }

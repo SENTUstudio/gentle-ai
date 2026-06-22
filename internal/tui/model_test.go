@@ -210,37 +210,23 @@ func profileModelStep(available bool) Model {
 	return m
 }
 
-func TestProfileCreateEmptyProviderEnterContinuesAndBacksOut(t *testing.T) {
-	keep := model.ModelAssignment{ProviderID: "anthropic", ModelID: "claude-sonnet-4", Effort: "high"}
-	orch := model.ModelAssignment{ProviderID: "openai", ModelID: "gpt-5"}
-
-	m := profileModelStep(false)
+func TestProfileCreateEmptyProviderEnterBacksOut(t *testing.T) {
+	// Spec (task 6.2): when the model cache is missing, the profile create
+	// model step offers ONLY "Back". Pressing enter must return to step 0
+	// (name input), NOT advance to the confirm step.
+	m := profileModelStep(false) // available=false → cache missing
 	m.ProfileDraft = model.Profile{
 		Name:              "work",
-		OrchestratorModel: orch,
-		PhaseAssignments:  map[string]model.ModelAssignment{"sdd-apply": keep},
+		OrchestratorModel: model.ModelAssignment{ProviderID: "openai", ModelID: "gpt-5"},
+		PhaseAssignments:  map[string]model.ModelAssignment{"sdd-apply": {ProviderID: "anthropic", ModelID: "claude-sonnet-4", Effort: "high"}},
 	}
 
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	state := updated.(Model)
 
-	if state.ProfileCreateStep != 2 || state.Cursor != 0 {
-		t.Fatalf("step/cursor = %d/%d, want 2/0", state.ProfileCreateStep, state.Cursor)
-	}
-	if state.ProfileDraft.OrchestratorModel != orch {
-		t.Fatalf("orchestrator = %+v, want unchanged %+v", state.ProfileDraft.OrchestratorModel, orch)
-	}
-	if got := state.ProfileDraft.PhaseAssignments["sdd-apply"]; got != keep {
-		t.Fatalf("sdd-apply assignment = %+v, want unchanged %+v", got, keep)
-	}
-
-	back := profileModelStep(false)
-	back.Cursor = 1
-	updated, _ = back.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	state = updated.(Model)
-
+	// Only "Back" is available (cursor 0) — enter returns to step 0, not step 2.
 	if state.Screen != ScreenProfileCreate || state.ProfileCreateStep != 0 || state.Cursor != 0 {
-		t.Fatalf("screen/step/cursor = %v/%d/%d, want ScreenProfileCreate/0/0", state.Screen, state.ProfileCreateStep, state.Cursor)
+		t.Fatalf("screen/step/cursor = %v/%d/%d, want ScreenProfileCreate/0/0 (Back only)", state.Screen, state.ProfileCreateStep, state.Cursor)
 	}
 }
 

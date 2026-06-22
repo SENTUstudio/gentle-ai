@@ -2996,3 +2996,210 @@ func TestRunSync_RestoresCodexPhaseModelAssignments(t *testing.T) {
 		t.Fatalf("AGENTS.md rendered carril table instead of Custom per-phase table; got:\n%s", text)
 	}
 }
+
+// ─── R-PROF-31: Missing model warning during sync ──────────────────────────
+
+// writeTestModelCache writes a minimal models.json cache file at path.
+func writeTestModelCache(t *testing.T, path, modelsJSON string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(path, []byte(modelsJSON), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+}
+
+const testCacheWithHaiku = `{
+  "anthropic": {
+    "name": "Anthropic",
+    "models": {
+      "claude-haiku-3-5": {"id": "claude-haiku-3-5", "name": "Claude Haiku 3.5", "tool_call": true}
+    }
+  }
+}`
+
+// TestValidateProfileModelAssignments_WarnsOnUnknownModel verifies that a
+// profile sub-agent referencing a model absent from the cache produces a
+// warning naming the agent key and the unknown model ID (R-PROF-31).
+func TestValidateProfileModelAssignments_WarnsOnUnknownModel(t *testing.T) {
+	cachePath := filepath.Join(t.TempDir(), "models.json")
+	writeTestModelCache(t, cachePath, testCacheWithHaiku)
+
+	profiles := []model.Profile{
+		{
+			Name: "cheap",
+			OrchestratorModel: model.ModelAssignment{
+				ProviderID: "anthropic",
+				ModelID:    "claude-haiku-3-5",
+			},
+			PhaseAssignments: map[string]model.ModelAssignment{
+				"sdd-apply": {ProviderID: "anthropic", ModelID: "old-model-id"},
+			},
+		},
+	}
+
+	warnings := validateProfileModelAssignments(profiles, cachePath)
+
+	found := false
+	for _, w := range warnings {
+		if strings.Contains(w, "sdd-apply-cheap") && strings.Contains(w, "old-model-id") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected a warning mentioning 'sdd-apply-cheap' and 'old-model-id', got %v", warnings)
+	}
+
+	// The known orchestrator model (claude-haiku-3-5) must NOT produce a warning.
+	for _, w := range warnings {
+		if strings.Contains(w, "sdd-orchestrator-cheap") {
+			t.Errorf("known orchestrator model should not warn, got %q", w)
+		}
+	}
+}
+
+// TestValidateProfileModelAssignments_NoWarningsWhenCacheMissing verifies that
+// when the cache file does not exist, no warnings are emitted (there is nothing
+// to validate against — warning on every model would be noise).
+func TestValidateProfileModelAssignments_NoWarningsWhenCacheMissing(t *testing.T) {
+	cachePath := filepath.Join(t.TempDir(), "nonexistent", "models.json")
+
+	profiles := []model.Profile{
+		{
+			Name: "cheap",
+			OrchestratorModel: model.ModelAssignment{
+				ProviderID: "anthropic",
+				ModelID:    "claude-haiku-3-5",
+			},
+		},
+	}
+
+	warnings := validateProfileModelAssignments(profiles, cachePath)
+	if len(warnings) != 0 {
+		t.Errorf("expected no warnings when cache file is missing, got %v", warnings)
+	}
+}
+
+// TestValidateProfileModelAssignments_NoWarningsForKnownModels verifies that
+// profiles whose models all exist in the cache produce zero warnings.
+func TestValidateProfileModelAssignments_NoWarningsForKnownModels(t *testing.T) {
+	cachePath := filepath.Join(t.TempDir(), "models.json")
+	writeTestModelCache(t, cachePath, testCacheWithHaiku)
+
+	profiles := []model.Profile{
+		{
+			Name: "cheap",
+			OrchestratorModel: model.ModelAssignment{
+				ProviderID: "anthropic",
+				ModelID:    "claude-haiku-3-5",
+			},
+			PhaseAssignments: map[string]model.ModelAssignment{
+				"sdd-apply": {ProviderID: "anthropic", ModelID: "claude-haiku-3-5"},
+			},
+		},
+	}
+
+	warnings := validateProfileModelAssignments(profiles, cachePath)
+	if len(warnings) != 0 {
+		t.Errorf("expected no warnings when all models are known, got %v", warnings)
+	}
+}
+
+// TestRunSyncWithSelection_WarnsOnUnknownProfileModel is the R-PROF-31
+// integration test: running sync with a profile that references a model absent
+// from the OpenCode cache must populate SyncResult.Warnings and preserve the
+// model assignment (no hard error).
+func TestRunSyncWithSelection_WarnsOnUnknownProfileModel(t *testing.T) {
+	home := t.TempDir()
+	restoreCommand := runCommand
+	restoreLookPath := cmdLookPath
+	t.Cleanup(func() {
+		runCommand = restoreCommand
+		cmdLookPath = restoreLookPath
+	})
+	runCommand = func(string, ...string) error { return nil }
+	cmdLookPath = func(name string) (string, error) { return "/usr/local/bin/" + name, nil }
+
+	// Write a model cache that contains claude-haiku-3-5 but NOT old-model-id.
+	cachePath := filepath.Join(home, ".cache", "opencode", "models.json")
+	writeTestModelCache(t, cachePath, testCacheWithHaiku)
+
+	profiles := []model.Profile{
+		{
+			Name: "cheap",
+			OrchestratorModel: model.ModelAssignment{
+				ProviderID: "anthropic",
+				ModelID:    "claude-haiku-3-5",
+			},
+			PhaseAssignments: map[string]model.ModelAssignment{
+				"sdd-apply": {ProviderID: "anthropic", ModelID: "old-model-id"},
+			},
+		},
+	}
+
+	sel := model.Selection{
+		Agents: []model.AgentID{model.AgentOpenCode},
+		Components: []model.ComponentID{
+			model.ComponentSDD,
+			model.ComponentEngram,
+			model.ComponentContext7,
+			model.ComponentGGA,
+			model.ComponentSkills,
+		},
+		SDDMode:  model.SDDModeSingle,
+		Profiles: profiles,
+	}
+
+	result, err := RunSyncWithSelection(home, sel)
+	if err != nil {
+		t.Fatalf("RunSyncWithSelection() error = %v", err)
+	}
+
+	// A warning must be recorded for the unknown model.
+	found := false
+	for _, w := range result.Warnings {
+		if strings.Contains(w, "old-model-id") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("SyncResult.Warnings should mention 'old-model-id', got %v", result.Warnings)
+	}
+
+	// The model assignment must be preserved in opencode.json (not cleared).
+	settingsPath := filepath.Join(home, ".config", "opencode", "opencode.json")
+	settingsData, readErr := os.ReadFile(settingsPath)
+	if readErr != nil {
+		t.Fatalf("ReadFile(%q) error = %v", settingsPath, readErr)
+	}
+	if !strings.Contains(string(settingsData), "old-model-id") {
+		t.Errorf("opencode.json should still contain 'old-model-id' (model preserved), got:\n%s", string(settingsData))
+	}
+}
+
+// TestRenderSyncReportIncludesWarnings verifies that RenderSyncReport surfaces
+// collected warnings so they are visible to the user (not only on stderr).
+func TestRenderSyncReportIncludesWarnings(t *testing.T) {
+	result := SyncResult{
+		NoOp:   false,
+		Agents: []model.AgentID{model.AgentOpenCode},
+		Selection: model.Selection{
+			Components: []model.ComponentID{model.ComponentSDD},
+		},
+		FilesChanged: 1,
+		Warnings: []string{
+			"sdd-apply-cheap references unknown model old-model-id",
+		},
+		Verify: verify.Report{Ready: true},
+	}
+
+	report := RenderSyncReport(result)
+
+	if !strings.Contains(report, "old-model-id") {
+		t.Errorf("RenderSyncReport() should include the warning text; got:\n%s", report)
+	}
+	if !strings.Contains(strings.ToLower(report), "warning") {
+		t.Errorf("RenderSyncReport() should label warnings as such; got:\n%s", report)
+	}
+}

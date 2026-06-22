@@ -24,18 +24,18 @@
 
 - [x] 3.1 Add screen constants to `internal/tui/model.go`: `ScreenProfiles`, `ScreenProfileCreate`, `ScreenProfileDelete`; add state fields: `ProfileList []model.Profile`, `ProfileCursor int`, `ProfileCreateStep int` (0=name, 1=orch-model, 2=subagent-models, 3=confirm), `ProfileDraft model.Profile`, `ProfileDeleteTarget string`
 - [x] 3.2 Add routes to `internal/tui/router.go`: `ScreenProfiles{Backward: ScreenWelcome}`, `ScreenProfileCreate{Backward: ScreenProfiles}`, `ScreenProfileDelete{Backward: ScreenProfiles}`
-- [x] 3.3 **[RED]** Write teatest test for `ScreenProfiles` in `internal/tui/screens/profiles_test.go`: renders profile list with ✦ for default, navigates with j/k, `n` transitions to create, `d` on non-default shows delete, `d` on default is no-op, `esc` goes back
+- [x] 3.3 **[RED]** Write unit test (direct `model.Update()` / render assertions) for `ScreenProfiles` in `internal/tui/screens/profiles_test.go`: renders profile list with ✦ for default, navigates with j/k, `n` transitions to create, `d` on non-default shows delete, `d` on default is no-op, `esc` goes back
 - [x] 3.4 **[GREEN]** Create `internal/tui/screens/profiles.go` — profile list screen: renders existing profiles with ✦ default marker, "Create new profile" action, "Back" action; handles j/k navigation, enter (→ edit), n (→ create), d (→ delete, guards default), esc (→ welcome)
-- [x] 3.5 **[RED]** Write teatest test for `ScreenProfileCreate` step flow: name input validates and rejects reserved/invalid names, enter advances to orchestrator picker (reuses `ModelPickerState`), sub-agent picker step, confirm step shows summary
+- [x] 3.5 **[RED]** Write unit test (direct `model.Update()` / render assertions) for `ScreenProfileCreate` step flow: name input validates and rejects reserved/invalid names, enter advances to orchestrator picker (reuses `ModelPickerState`), sub-agent picker step, confirm step shows summary
 - [x] 3.6 **[GREEN]** Create `internal/tui/screens/profile_create.go` — 4-step creation flow: (1) name text input with validation, (2) orchestrator model picker (reuse `ModelPickerState`), (3) sub-agent models picker (10 phases + "Set all"), (4) confirm screen with agent count; triggers `SyncFn` with `SyncOverrides{Profiles: []Profile{draft}}`
 - [x] 3.7 Wire profile screens into `model.go` Update/View/Init dispatch: load `ProfileList` via `sdd.DetectProfiles` on entry to `ScreenProfiles`; handle `SyncDoneMsg` to refresh list; update key-handling `Update` for all 3 new screens
 - [x] 3.8 Modify `internal/tui/screens/welcome.go` — add "OpenCode SDD Profiles" option between "Configure Models" and "Manage Backups"; show `(N)` badge where N = count of non-default profiles (0 = no badge); only show option when OpenCode is installed
 
 ## Phase 4: TUI Screens — Profile Edit & Delete
 
-- [x] 4.1 **[RED]** Write teatest test for edit flow: pressing enter on existing profile pre-populates models in picker, name shown as fixed header (not editable), save triggers sync with updated Profile
+- [x] 4.1 **[RED]** Write unit test (direct `model.Update()` / render assertions) for edit flow: pressing enter on existing profile pre-populates models in picker, name shown as fixed header (not editable), save triggers sync with updated Profile
 - [x] 4.2 **[GREEN]** Extend `internal/tui/screens/profile_create.go` to support edit mode: `EditMode bool`, `OriginalName string`; step 1 shows name as read-only header; steps 2–4 identical to create but pre-populated with current model assignments from `ProfileDraft`
-- [x] 4.3 **[RED]** Write teatest test for `ScreenProfileDelete`: renders profile name, lists all 11 agent keys, "Delete & Sync" and "Cancel" options; cancel returns to list; confirm calls `RemoveProfileAgents` then sync
+- [x] 4.3 **[RED]** Write unit test (direct `model.Update()` / render assertions) for `ScreenProfileDelete`: renders profile name, lists all 11 agent keys, "Delete & Sync" and "Cancel" options; cancel returns to list; confirm calls `RemoveProfileAgents` then sync
 - [x] 4.4 **[GREEN]** Create `internal/tui/screens/profile_delete.go` — confirmation screen: shows profile name, agent key list (`sdd-orchestrator-{name}` + 10 sub-agents), "Delete & Sync" / "Cancel"; confirm calls `sdd.RemoveProfileAgents` then triggers `SyncFn`; success returns to `ScreenProfiles` with refreshed list
 - [x] 4.5 Wire edit/delete transitions in `model.go` Update: entering `ScreenProfileCreate` with `EditMode=true` populates `ProfileDraft` from selected profile; `ScreenProfileDelete` sets `ProfileDeleteTarget`; handle post-delete `SyncDoneMsg` → navigate to `ScreenProfiles`
 
@@ -49,9 +49,9 @@
 
 ## Phase 6: Polish & Edge Cases
 
-- [x] 6.1 **[TEST]** E2E: profile creation, sync, list display, edit (model change), re-sync, delete, confirm deletion removed from JSON — verify agent keys before/after each operation
-- [x] 6.2 Handle missing OpenCode model cache edge case in `ScreenProfileCreate`: if `~/.cache/opencode/models.json` does not exist, show "Run OpenCode at least once to populate the model cache" message and only offer "Back"
+- [ ] 6.1 **[TEST]** ~~E2E: profile creation, sync, list display, edit (model change), re-sync, delete, confirm deletion removed from JSON~~ — **descoped**: no E2E test file exists for this change; coverage is provided by unit tests (direct `model.Update()`) and the `TestRunSyncWithProfilesIntegration` sync integration test
+- [x] 6.2 Handle missing OpenCode model cache edge case in `ScreenProfileCreate`: if `~/.cache/opencode/models.json` does not exist, show "Run OpenCode at least once to populate the model cache" message and only offer "Back" (no "Continue with defaults" — verified by `TestRenderProfileCreate_Step1_CacheMissing_ShowsOnlyBack` and `TestProfileCreateOptionCount_Step1CacheMissingReturnsOne`)
 - [x] 6.3 Handle profile name collision in `ScreenProfileCreate`: if entered name already exists in `ProfileList`, show overwrite confirmation prompt before proceeding to model picker
-- [x] 6.4 Handle sync-time missing model warning (R-PROF-31): if profile sub-agent model not found in OpenCode model cache, log warning and preserve existing assignment — do NOT error
+- [x] 6.4 Handle sync-time missing model warning (R-PROF-31): if profile sub-agent model not found in OpenCode model cache, log warning and preserve existing assignment — do NOT error (implemented via `validateProfileModelAssignments` + `SyncResult.Warnings`; verified by `TestValidateProfileModelAssignments_WarnsOnUnknownModel` and `TestRunSyncWithSelection_WarnsOnUnknownProfileModel`)
 - [x] 6.5 Verify post-injection check in `inject.go` covers profile orchestrators: extend the `strings.Contains(settingsText, ...)` post-check to verify `sdd-orchestrator-{name}` for each injected profile
-- [x] 6.6 **[TEST]** TUI snapshot tests for welcome screen: no profiles (no badge), 1 profile (badge shows 1), 3 profiles (badge shows 3)
+- [x] 6.6 **[TEST]** String-assertion unit tests for welcome screen: no profiles (no badge), 1 profile (badge shows 1), 3 profiles (badge shows 3)

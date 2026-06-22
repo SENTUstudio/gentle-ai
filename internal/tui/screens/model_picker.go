@@ -678,6 +678,17 @@ func renderPhaseList(
 	}
 
 	if len(state.AvailableIDs) == 0 {
+		// Profile create flow (task 6.2): when the model cache is missing, the
+		// spec requires the cache-missing message AND only a "Back" option —
+		// "Continue with defaults" is NOT offered for profile creation.
+		if state.ForProfile {
+			b.WriteString(styles.WarningStyle.Render("Run OpenCode at least once to populate the model cache."))
+			b.WriteString("\n\n")
+			b.WriteString(renderOptions([]string{"← Back"}, cursor))
+			b.WriteString("\n")
+			b.WriteString(styles.HelpStyle.Render("enter: back • esc: back"))
+			return b.String()
+		}
 		b.WriteString(styles.WarningStyle.Render("OpenCode has not been run yet — model cache not found."))
 		b.WriteString("\n")
 		b.WriteString(styles.SubtextStyle.Render("Run 'opencode' once, then re-run 'gentle-ai sync' to assign models."))
@@ -685,9 +696,6 @@ func renderPhaseList(
 		b.WriteString(styles.SubtextStyle.Render("Using default model assignments for now."))
 		b.WriteString("\n\n")
 		backLabel := "← Back to SDD mode"
-		if state.ForProfile {
-			backLabel = "← Back"
-		}
 		b.WriteString(renderOptions([]string{"Continue with defaults", backLabel}, cursor))
 		b.WriteString("\n")
 		b.WriteString(styles.HelpStyle.Render("enter: confirm • esc: back"))

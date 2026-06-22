@@ -3933,17 +3933,14 @@ func (m Model) confirmProfileCreate() (tea.Model, tea.Cmd) {
 		// Reuse the same enter-on-row logic as ScreenModelPicker.
 		// Profile creation uses the profile-specific row list.
 		if len(m.ModelPicker.AvailableIDs) == 0 {
-			switch m.Cursor {
-			case 0:
-				m.ProfileCreateStep = 2
+			// Spec (task 6.2): when the model cache is missing, the profile
+			// create model step offers ONLY "Back". There is no "Continue with
+			// defaults" option — the user must populate the cache first.
+			if m.ProfileEditMode {
+				m.setScreen(ScreenProfiles)
+			} else {
+				m.ProfileCreateStep = 0
 				m.Cursor = 0
-			case 1:
-				if m.ProfileEditMode {
-					m.setScreen(ScreenProfiles)
-				} else {
-					m.ProfileCreateStep = 0
-					m.Cursor = 0
-				}
 			}
 			return m, nil
 		}
