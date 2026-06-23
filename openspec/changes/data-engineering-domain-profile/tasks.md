@@ -50,10 +50,10 @@ Chain strategy: stacked-to-main
 
 ## Phase 3: Apply + Verify Dual-Path
 
-- [ ] 3.1 `internal/etl/header.go` + `_test.go`: `ETLHeader`, `RenderHeader`, `ValidateHeader`, `UpdateHeaderForModify`.
-- [ ] 3.2 `internal/etl/compare.go` + `_test.go`: `BuildExceptSQL`.
-- [ ] 3.3 Patch `internal/assets/skills/sdd-apply/SKILL.md`: Camino A branch.
-- [ ] 3.4 Patch `internal/assets/skills/sdd-verify/SKILL.md`: Camino B branch.
+- [x] 3.1 `internal/etl/header.go` + `_test.go`: `ETLHeader`, `RenderHeader`, `ValidateHeader`, `UpdateHeaderForModify`.
+- [x] 3.2 `internal/etl/compare.go` + `_test.go`: `BuildExceptSQL`.
+- [x] 3.3 Patch `internal/assets/skills/sdd-apply/SKILL.md`: Camino A branch.
+- [x] 3.4 Patch `internal/assets/skills/sdd-verify/SKILL.md`: Camino B branch.
 
 ## Phase 4a: Skills Foundation
 
