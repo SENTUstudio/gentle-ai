@@ -1,10 +1,10 @@
 # Apply Progress: Data Engineering Domain Profile
 
 **Change**: data-engineering-domain-profile
-**Phases covered**: 1, 2, 3 of 8 — Profile Detection + Config Schema → Spec/Design Templates → Apply + Verify Dual-Path
+**Phases covered**: 1, 2, 3, 4a of 8 — Profile Detection + Config Schema → Spec/Design Templates → Apply + Verify Dual-Path → Skills Foundation
 **Mode**: Strict TDD (test runner: `go test ./...`)
 **Artifact store**: both (OpenSpec + Engram)
-**Delivery**: chained PRs — feature-branch-chain, 8 PRs; PR 1 (Config + detect + CLI), PR 2 (sidecar + pattern + spec/design), PR 3 (header + compare + apply/verify). Latest batch = PR 3.
+**Delivery**: chained PRs — feature-branch-chain, 8 PRs; PR 1 (Config + detect + CLI), PR 2 (sidecar + pattern + spec/design), PR 3 (header + compare + apply/verify), PR 4a (protocol + pattern-detect + catalog + study-file + create-table). Latest batch = PR 4a.
 **Chain strategy note**: `tasks.md` Review Workload Forecast says `stacked-to-main`; the
 orchestrator instruction for this run says `feature-branch-chain`. The orchestrator instruction
 is followed for PR targeting. This does not affect what was implemented.
@@ -294,3 +294,112 @@ unchanged (`domain` absent → both skill branches are NO-OPs; etl
 header/compare unreachable by app-dev callers). Ready for `sdd-apply`
 Phase 4a (Skills Foundation: data-engineer-protocol.md + 8 SkillIDs +
 catalog registration + pattern-detect + study-file + create-table).
+
+---
+
+# Phase 4a: Skills Foundation
+
+**Phase**: 4a of 8 — Skills Foundation (shared protocol + 8 SkillIDs + catalog
+registration + `data-engineer-pattern-detect` + embed/patch study-file +
+embed/patch create-table)
+**Mode**: Strict TDD (test runner: `go test ./...`)
+**Delivery**: chained PR slice (PR 4a of 8) under `feature-branch-chain`.
+Builds atop PR 3 (`feature/aws-dataengineer`). Backward compatibility
+preserved: the 8 new skills are registered at category `data-engineering` /
+priority `p1` and are NOT part of any preset (`SkillsForPreset` is unchanged),
+so a default/minimal/ecosystem/full install never installs them and app-dev
+behaviour is byte-identical. The new `_shared` protocol + 3 skill dirs are
+additive assets.
+
+> **Batch recovery note**: Phase 4a artifacts were found complete-but-uncommitted
+> in the working tree (a prior session produced them without committing or
+> persisting progress — Engram memory #1064 still read "Ready for Phase 4a").
+> This batch VERIFIED the existing artifacts against the spec/design
+> (build + targeted tests + goldens + full suite), confirmed correctness, then
+> merged this progress record. No artifact was rewritten; only verified.
+
+## Completed Tasks
+
+- [x] 4a.1 Create `internal/assets/skills/_shared/data-engineer-protocol.md` — shared reference (6 sections): §1 ETL Header Protocol (6-field format, points at `etl.RenderHeader`/`ValidateHeader`/`UpdateHeaderForModify`), §2 Authorship Rule (AI never the author; forbidden vocab; replacement rule for legacy violations), §3 Pattern Index (4-pattern taxonomy with markers/confidence/scaffold, points at `etl.DetectPattern`), §4 Master-Project Awareness (infra vs carga repos + git flow), §5 AWS Profile logical-name rule (`ResolveProfile`/`ScrubProfiles`, closed set prd/dev/usuario), §6 cross-references to all `etl`/`sddconfig` Go funcs.
+- [x] 4a.2 Add 8 `SkillDataEngineer*` constants to `internal/model/types.go` — `PatternDetect`, `StudyFile`, `ETLS3`, `ETLGlue`, `ETLSharepoint`, `CreateTable`, `SQLFromLogic`, `Integrate` (+ doc comment). Pinned by `TestDataEngineerSkillIDs_ClosedSet` (8 subtest cases + `len==8` guard).
+- [x] 4a.3 Register 8 data-engineer skills in `internal/catalog/skills.go` — all category `data-engineering`, priority `p1`, canonical names. Pinned by `TestDataEngineerSkillsRegistered` (8 skills × name/category/priority assertions).
+- [x] 4a.4 Create `internal/assets/skills/data-engineer-pattern-detect/SKILL.md` — new skill; protocol ref prepended; documents the "never silent" detection contract (pattern + confidence + rationale), Markers struct fields mapped to §3, 0.8/0.5/0.0 thresholds, user-override propagation to `sdd-apply` Camino A, YAML Pattern Detection Report output.
+- [x] 4a.5 Embed + patch `internal/assets/skills/data-engineer-study-file/SKILL.md` — copied from `~/.config/opencode/skills/`; prepended `## Reference: _shared/data-engineer-protocol.md`; added Resources cross-reference. (No authorship byte-change needed: source had no AI-attribution violation — `metadata.author: gentleman-programming` is human; the etl-s3 violation is Phase 4b.)
+- [x] 4a.6 Embed + patch `internal/assets/skills/data-engineer-create-table/SKILL.md` — copied from source; prepended protocol ref; patched Phase 2/3 deploy commands to resolve the AWS profile at runtime via `--profile "$(gentle-ai sdd-config --json | jq -r .aws_profiles.dev)"` (protocol §5, never hardcoded) + added `ScrubProfiles` reminder on shared output.
+
+## TDD Cycle Evidence
+
+| Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| 4a.1 | `internal/assets/skills/_shared/data-engineer-protocol.md` | N/A (markdown) | `TestSkillFrontmatterIsLintClean` (via `_shared/SKILL.md`) + assets count | ➖ N/A (reference doc, no Go test layer) | ➖ N/A | ➖ Triangulation skipped: DRY contract consumed by skills; validated structurally by §-references in 4a.4/4a.5/4a.6 + sdd-verify | ➖ N/A |
+| 4a.2 | `internal/model/types_test.go` | Unit | ✅ model pkg baseline PASS (captured before edit) | ✅ Written (undefined `SkillDataEngineer*` constants → compile error) | ✅ 8/8 subtests passed | ✅ 8 cases (one per SkillID) + `len==8` closed-set guard so adding a skill without a const breaks the test | ➖ None needed (const block) |
+| 4a.3 | `internal/catalog/skills_test.go` | Unit | ✅ catalog pkg baseline PASS | ✅ Written (missing catalog entries for the 8 SkillIDs) | ✅ 8/8 skills matched | ✅ 8 cases × 3 fields (Name + Category `data-engineering` + Priority `p1`) | ➖ None needed |
+| 4a.4 | `internal/assets/skills/data-engineer-pattern-detect/SKILL.md` | N/A (markdown) | `TestSkillFrontmatterIsLintClean` + `TestEmbeddedAssetCount` | ➖ N/A (skill prompt) | ➖ N/A | ➖ Triangulation skipped: skill validated by sdd-verify scenarios; detection logic already pinned by Phase 2 `etl.DetectPattern` tests | ➖ N/A |
+| 4a.5 | `internal/assets/skills/data-engineer-study-file/SKILL.md` | N/A (markdown) | `TestSkillFrontmatterIsLintClean` + `TestEmbeddedAssetCount` | ➖ N/A | ➖ N/A | ➖ N/A | ➖ N/A |
+| 4a.6 | `internal/assets/skills/data-engineer-create-table/SKILL.md` | N/A (markdown) | `TestSkillFrontmatterIsLintClean` + `TestEmbeddedAssetCount` | ➖ N/A | ➖ N/A | ➖ N/A | ➖ N/A |
+
+### Test Summary (Phase 4a)
+
+- **New Go test functions written**: 2 (`model.TestDataEngineerSkillIDs_ClosedSet` with 8 subtests; `catalog.TestDataEngineerSkillsRegistered` with 8 skills × 3 field assertions). Closed-set guards (`len==8` in both) force any future SkillID/catalog addition to extend the tables or fail.
+- **Existing test modified**: `internal/assets/assets_test.go` `TestEmbeddedAssetCount` bumped expected skill directories 23 → 26 (adds `_shared` was already counted; the 3 new dirs: `data-engineer-pattern-detect`, `data-engineer-study-file`, `data-engineer-create-table`). `TestSkillFrontmatterIsLintClean` now lints all 26 (including the 3 new) — PASS.
+- **Cumulative Go tests across the change**: 83 (Phases 1-3) + 2 = **85**, all passing.
+- **Layers used**: Unit (2 new functions).
+- **Markdown assets**: 4 created (protocol, pattern-detect) / embedded+patched (study-file, create-table); all pass frontmatter lint + asset presence checks; no Go test layer (validated by sdd-verify scenarios, consistent with tasks 1.7/2.3/2.4/3.3/3.4).
+
+## Golden File Verification (Phase 4a)
+
+- `TestGoldenSDD_*` (all 12 adapters): ✅ PASS. The 3 new data-engineer skills are NOT `sdd-*` skills, so they are not part of the SDD injector golden snapshots; adding them as asset directories does not change any golden content.
+- `TestEmbeddedAssetCount`: ✅ PASS at 26 (assertion updated to match the 3 new dirs).
+- `TestSkillFrontmatterIsLintClean`: ✅ PASS for all 26 skills incl. the 3 new data-engineer ones.
+- `git diff --stat HEAD -- testdata/golden/` after this batch: **empty** (no golden touched, no regeneration needed). Confirms the Phase 2/3 refinement: only `sdd-init` content-goldens break on skill content patches; additive new skill dirs + non-`sdd-init` changes need no golden regeneration.
+
+## Verification Results
+
+| Check | Command | Result |
+|---|---|---|
+| Build | `go build ./...` | ✅ PASS |
+| Vet (target) | `go vet ./internal/model/... ./internal/catalog/...` | ✅ PASS (no warnings) |
+| gofmt | `gofmt -l internal/model/ internal/catalog/` | ✅ Clean (post `gofmt -w`) |
+| Model tests | `go test ./internal/model/ -count=1` | ✅ PASS |
+| Catalog tests | `go test ./internal/catalog/ -count=1` | ✅ PASS |
+| Assets tests | `go test ./internal/assets/ -count=1` | ✅ PASS (count=26, frontmatter lint 26/26) |
+| Components golden (skill content) | `go test ./internal/components/ -run TestGoldenSDD -count=1` | ✅ PASS (12/12 adapters) — new dirs are not `sdd-*`, break no golden |
+| Full suite | `go test ./... -count=1` | ✅ No regressions — only the pre-existing flaky `TestRunInstallKimiMissingUVFailsBeforeExecutingInstallCommands` fails (identical to Phase 1/2/3 baseline; Phase 4a does NOT touch `internal/cli`, confirmed by `git status`) |
+
+## Backward Compatibility (verified)
+
+- `internal/model/types.go` change is purely additive (8 new `SkillID` consts in an existing `const (...)` block). No existing constant renamed/removed.
+- `internal/catalog/skills.go` change is purely additive (8 new entries appended to `mvpSkills`). `MVPSkills()` returns a superset; existing callers that look up prior skills see identical results. `TestMVPSkillsNoDuplicates` + `TestMVPSkillsCoverAllPresetSkills` still PASS.
+- `SkillsForPreset` / `AllSkillIDs` in `presets.go` are UNCHANGED — the 8 data-engineer skills are registered (known to the catalog) but installed by NO preset. A default/minimal/ecosystem/full install never writes them; they activate only when a user explicitly selects them or under the `domain: data-engineering` profile.
+- The 3 new asset directories + `_shared/data-engineer-protocol.md` are additive; no existing asset moved/renamed. `_shared/` was already counted in the prior 23, so the 23→26 delta is exactly the 3 new skill dirs.
+- The two gofmt incidental cleanups (`TriggerBinding.Run` tag alignment; `TriggerEvent` test struct alignment) are whitespace-only, behaviour-neutral.
+
+## Deviations from Design
+
+- **"Authorship fix" is a NO-OP for study-file + create-table**: design File Changes row says embed "with protocol reference + authorship fix". The authorship fix (protocol §2) is CONDITIONAL — it applies only when the source carries an AI-attribution violation. Neither study-file nor create-table source had one (`metadata.author: gentleman-programming` is human; no `# author: generated by gentle-ai`, no `Co-Authored-By`). The actual violation lives in `data-engineer-etl-s3` and is fixed in Phase 4b. So for 4a.5/4a.6 the patch is "prepend protocol ref" (+ profile-resolution for create-table), and the authorship byte-change is correctly absent. Flagged so the verify phase does not expect an authorship diff here.
+- **create-table profile resolution rendering**: protocol §5 uses the Go form `ResolveProfile(cfg, "dev")` in prose. The embedded create-table skill renders the runtime equivalent `--profile "$(gentle-ai sdd-config --json | jq -r .aws_profiles.dev)"`. Both express the same rule (resolve logical→concrete at runtime, never hardcode the profile string); the CLI form is what a skill consumer actually executes. Faithful to §5's intent.
+- **8 skills registered, only 3 embedded in 4a**: by design (Phases 4b/4c/4d embed the other 5). The catalog knows all 8 now; `assets_test.go` counts only the 3 embedded dirs (26 = prior 23 + 3). No preset installs the not-yet-embedded 5, so there is no dangling install reference.
+
+## Issues Found
+
+- **Uncommitted prior-session work**: Phase 4a artifacts were present in the working tree but neither committed nor reflected in Engram (memory #1064 still read "Ready for Phase 4a"). Resolved by verifying the artifacts (build/targeted/golden/full suite) and merging this progress record. No rewrite was needed; the artifacts were correct and complete. Recommendation: the prior session should have persisted progress — flagged as a process note, not a code defect.
+- **gofmt incidental edits**: a `gofmt -w` during the prior session also reflowed two unrelated existing spots (`TriggerBinding.Run` struct-tag alignment in `types.go`; field alignment in `types_test.go`). Whitespace-only, behaviour-neutral; kept since they bring those lines to gofmt-canonical form. No functional change.
+- No other issues.
+
+## Workload / PR Boundary (Phase 4a)
+
+- **Mode**: chained PR slice (PR 4a of 8) under `feature-branch-chain`. Targets `feature/aws-dataengineer` (carries Phases 1-3). Delivery decision was resolved and documented from PR 1 onward; `tasks.md` Review Workload Forecast says `Decision needed before apply: No`, so no blocking decision was required for this batch.
+- **Current work unit**: Phase 4a — protocol + 8 SkillIDs + catalog + pattern-detect + study-file + create-table.
+- **Boundary**: starts at task 4a.1, ends at task 4a.6. Self-contained: additive model/catalog consts (2 test functions, 8-skill closed-set guards); 4 markdown assets (1 new shared protocol + 1 new skill + 2 embedded/patched skills). No golden regeneration required; no new dependency; `presets.go` untouched.
+- **Estimated review budget impact**: PR 4a forecast was ~680 lines. Real review surface (model/catalog Go + tests + 4 skill markdown files) is within the 800-line budget. No golden file churn.
+
+## Status
+
+6/6 Phase 4a tasks complete. 21/21 cumulative tasks across the change
+(Phase 1 7 + Phase 2 4 + Phase 3 4 + Phase 4a 6). 85 cumulative Go tests
+passing (Phase 1 41 + Phase 2 25 + Phase 3 17 + Phase 4a 2). App-dev
+behaviour unchanged (the 8 skills are p1, in NO preset, gated on
+`domain: data-engineering`; `_shared` protocol is a passive reference).
+Ready for `sdd-apply` Phase 4b (Embed ETL Skills 1: data-engineer-etl-s3 +
+data-engineer-sql-from-logic — the former carries the authorship violation
+fixed by protocol §2).

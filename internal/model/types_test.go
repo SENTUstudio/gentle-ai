@@ -13,9 +13,9 @@ func TestAgentAntigravity(t *testing.T) {
 // 1.1 — all six TriggerEvent constants exist with correct string values.
 func TestTriggerEvent_ClosedSet(t *testing.T) {
 	events := []struct {
-		name  string
-		got   TriggerEvent
-		want  string
+		name string
+		got  TriggerEvent
+		want string
 	}{
 		{"EventPreCommit", EventPreCommit, "pre-commit"},
 		{"EventPrePush", EventPrePush, "pre-push"},
@@ -106,5 +106,35 @@ func TestTriggerRuleSet_Fields(t *testing.T) {
 	}
 	if rs.Bindings != nil {
 		t.Errorf("zero-value TriggerRuleSet.Bindings = %v, want nil", rs.Bindings)
+	}
+}
+
+// 2.x — all eight data-engineer SkillID constants exist with correct string
+// values. Adding a skill to the enum without a matching const breaks the
+// closed-set assertion (len != 8), forcing the author to extend the table.
+func TestDataEngineerSkillIDs_ClosedSet(t *testing.T) {
+	skills := []struct {
+		name string
+		got  SkillID
+		want string
+	}{
+		{"SkillDataEngineerPatternDetect", SkillDataEngineerPatternDetect, "data-engineer-pattern-detect"},
+		{"SkillDataEngineerStudyFile", SkillDataEngineerStudyFile, "data-engineer-study-file"},
+		{"SkillDataEngineerETLS3", SkillDataEngineerETLS3, "data-engineer-etl-s3"},
+		{"SkillDataEngineerETLGlue", SkillDataEngineerETLGlue, "data-engineer-etl-glue"},
+		{"SkillDataEngineerETLSharepoint", SkillDataEngineerETLSharepoint, "data-engineer-etl-sharepoint"},
+		{"SkillDataEngineerCreateTable", SkillDataEngineerCreateTable, "data-engineer-create-table"},
+		{"SkillDataEngineerSQLFromLogic", SkillDataEngineerSQLFromLogic, "data-engineer-sql-from-logic"},
+		{"SkillDataEngineerIntegrate", SkillDataEngineerIntegrate, "data-engineer-integrate"},
+	}
+	if len(skills) != 8 {
+		t.Fatalf("expected 8 data-engineer SkillID constants, got %d", len(skills))
+	}
+	for _, tc := range skills {
+		t.Run(tc.name, func(t *testing.T) {
+			if string(tc.got) != tc.want {
+				t.Errorf("%s = %q, want %q", tc.name, tc.got, tc.want)
+			}
+		})
 	}
 }

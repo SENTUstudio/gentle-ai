@@ -57,12 +57,12 @@ Chain strategy: stacked-to-main
 
 ## Phase 4a: Skills Foundation
 
-- [ ] 4a.1 Create `internal/assets/skills/_shared/data-engineer-protocol.md`.
-- [ ] 4a.2 Add 8 `SkillDataEngineer*` constants to `internal/model/types.go`.
-- [ ] 4a.3 Register 8 data-engineer skills in `internal/catalog/skills.go`.
-- [ ] 4a.4 Create `internal/assets/skills/data-engineer-pattern-detect/SKILL.md`.
-- [ ] 4a.5 Embed + patch `internal/assets/skills/data-engineer-study-file/SKILL.md`.
-- [ ] 4a.6 Embed + patch `internal/assets/skills/data-engineer-create-table/SKILL.md`.
+- [x] 4a.1 Create `internal/assets/skills/_shared/data-engineer-protocol.md`.
+- [x] 4a.2 Add 8 `SkillDataEngineer*` constants to `internal/model/types.go`.
+- [x] 4a.3 Register 8 data-engineer skills in `internal/catalog/skills.go`.
+- [x] 4a.4 Create `internal/assets/skills/data-engineer-pattern-detect/SKILL.md`.
+- [x] 4a.5 Embed + patch `internal/assets/skills/data-engineer-study-file/SKILL.md`.
+- [x] 4a.6 Embed + patch `internal/assets/skills/data-engineer-create-table/SKILL.md`.
 
 ## Phase 4b: Embed ETL Skills 1
 
