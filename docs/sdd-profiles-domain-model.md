@@ -19,46 +19,77 @@ They are independent — a project can be `domain: data-engineering` with a `che
 
 ## Architecture Diagram
 
+The domain profile is not a separate system that feeds into SDD — it is a **branch gate inside each phase**. Every phase calls `gentle-ai sdd-config --json`, reads the `domain` field, and takes one of two paths. The 8-phase sequence is the same for both domains; what changes is the **content** of each phase.
+
 ```mermaid
 flowchart TB
-    subgraph SESSION["Session Start"]
-        PREFLIGHT["SDD Session Preflight"]
+    START["Session Preflight<br/>sdd-init detects domain<br/>Writes to openspec/config.yaml"]
+
+    START --> GATE0{"sdd-config --json<br/>domain = ?"}
+
+    GATE0 -->|"app-dev (default)"| FLOW_APP
+    GATE0 -->|"data-engineering"| FLOW_DATA
+
+    subgraph FLOW_APP["App-Dev Flow"]
+        direction TB
+        AE["explore<br/>─── app-dev ───<br/>Read codebase (.go, .ts)<br/>Skill: sdd-explore<br/>Model: Haiku (cheap)"]
+        AP["propose<br/>─── app-dev ───<br/>Feature proposal<br/>Scope + approach"]
+        AS["spec<br/>─── app-dev ───<br/>Requirements: Given/When/Then<br/>Code scenarios"]
+        AD["design<br/>─── app-dev ───<br/>Architecture patterns<br/>SOLID, hexagonal"]
+        AT["tasks<br/>─── app-dev ───<br/>Implementation tasks<br/>1 task per function"]
+        AA["apply<br/>─── app-dev ───<br/>Write Go/code<br/>TDD: go test ./...<br/>Skill: go-testing"]
+        AV["verify<br/>─── app-dev ───<br/>go test + go vet + go build<br/>Binary pass/fail"]
+        AZ["archive<br/>─── app-dev ───<br/>Move to archive/<br/>Merge spec deltas"]
+
+        AE --> AP --> AS --> AD --> AT --> AA --> AV --> AZ
     end
 
-    subgraph AXIS1["Axis 1 — Model Profile (existing)"]
-        direction LR
-        MP_CHEAP["cheap<br/>Haiku/Mini → explore, archive<br/>Opus/Sonnet → design, apply"]
-        MP_MID["mid<br/>Sonnet → all phases"]
-        MP_PREMIUM["premium<br/>Opus → all phases"]
+    subgraph FLOW_DATA["Data-Engineering Flow"]
+        direction TB
+        DE["explore<br/>─── data-eng ───<br/>Study source DATA (CSV, tables)<br/>Skill: study-file<br/>Encoding, dates, types<br/>Model: Sonnet (needs judgment)"]
+        DP["propose<br/>─── data-eng ───<br/>ETL proposal<br/>Source → Transform → Target<br/>Pattern: which of 4?"]
+        DS["spec<br/>─── data-eng ───<br/>ETL delta: Source Tables,<br/>Target Schema, Watermark,<br/>DAG, AWS Profiles, Verify<br/>Sidecar YAML: schema/partitions<br/>Model: Opus (precision)"]
+        DD["design<br/>─── data-eng ───<br/>DAG of transformations<br/>Insertion-point analysis<br/>Cascade impact mapping<br/>Model: Opus"]
+        DT["tasks<br/>─── data-eng ───<br/>[infra] / [carga] / [both]<br/>Git flow: Bitbucket<br/>feature→develop→release"]
+        DA["apply (Camino A)<br/>─── data-eng ───<br/>Glue Docker TDD loop<br/>Throwaway _test table<br/>Header protocol + authorship<br/>Skill: etl-* + pattern-detect"]
+        DV["verify (Camino B)<br/>─── data-eng ───<br/>SAM deploy BOTH repos<br/>Run Glue job<br/>Athena EXCEPT dev vs prd<br/>Sidecar validate + scrub"]
+        DZ["archive<br/>─── data-eng ───<br/>Same as app-dev<br/>+ sidecar YAML to specs/"]
+
+        DE --> DP --> DS --> DD --> DT --> DA --> DV --> DZ
     end
 
-    subgraph AXIS2["Axis 2 — Domain Profile (new)"]
-        direction LR
-        DP_APP["app-dev<br/>go-testing, branch-pr<br/>go test ./...<br/>software specs"]
-        DP_DATA["data-engineering<br/>study-file, etl-s3, create-table<br/>Glue Docker + SAM deploy<br/>ETL specs + sidecar YAML"]
-    end
+    AZ -.->|"same sequence<br/>different content"| RESULT["Change complete<br/>Table / Feature delivered"]
+    DZ -.->|"same sequence<br/>different content"| RESULT
 
-    subgraph CORE["SDD 8-Phase Core (unchanged)"]
-        direction LR
-        P1[explore] --> P2[propose] --> P3[spec] --> P4[design]
-        P4 --> P5[tasks] --> P6[apply] --> P7[verify] --> P8[archive]
-    end
+    classDef gate fill:#fbbf24,stroke:#b45309,stroke-width:2px,color:#000
+    classDef appPhase fill:#86efac,stroke:#16a34a,stroke-width:2px,color:#000
+    classDef dataPhase fill:#fca5a5,stroke:#dc2626,stroke-width:2px,color:#000
+    classDef result fill:#a78bfa,stroke:#6d28d9,stroke-width:2px,color:#000
+    classDef start fill:#60a5fa,stroke:#1d4ed8,stroke-width:2px,color:#000
 
-    PREFLIGHT --> AXIS1
-    PREFLIGHT --> AXIS2
-    AXIS1 -->|"which model per phase"| CORE
-    AXIS2 -->|"which skills/templates/verify per phase"| CORE
-
-    classDef modelProfile fill:#a78bfa,stroke:#6d28d9,stroke-width:2px,color:#000
-    classDef domainProfile fill:#60a5fa,stroke:#1d4ed8,stroke-width:2px,color:#000
-    classDef phase fill:#f9a8d4,stroke:#be185d,stroke-width:2px,color:#000
-    classDef session fill:#fbbf24,stroke:#b45309,stroke-width:2px,color:#000
-
-    class MP_CHEAP,MP_MID,MP_PREMIUM modelProfile
-    class DP_APP,DP_DATA domainProfile
-    class P1,P2,P3,P4,P5,P6,P7,P8 phase
-    class PREFLIGHT session
+    class GATE0 gate
+    class START start
+    class AE,AP,AS,AD,AT,AA,AV,AZ appPhase
+    class DE,DP,DS,DD,DT,DA,DV,DZ dataPhase
+    class RESULT result
 ```
+
+### Key insight: the gate is INSIDE each phase
+
+The domain detection happens **once** at session start (`sdd-init`), but the branching happens **inside every phase skill**. Each SKILL.md has a conditional block:
+
+```
+Phase skill reads:  gentle-ai sdd-config --json → domain field
+  │
+  ├── domain == "app-dev" (or absent)
+  │     → run existing app-dev logic (unchanged)
+  │
+  └── domain == "data-engineering"
+        → run data-engineering branch:
+           different skills, templates, verify approach
+```
+
+The 8-phase **sequence** never changes. The **content** of each phase changes based on the domain.
 
 ---
 
