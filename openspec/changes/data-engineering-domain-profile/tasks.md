@@ -43,10 +43,10 @@ Chain strategy: stacked-to-main
 
 ## Phase 2: Spec + Design Templates
 
-- [ ] 2.1 `internal/etl/sidecar.go` + `_test.go`: `Sidecar`, `ParseSidecar`, `ValidateSidecar`.
-- [ ] 2.2 `internal/etl/pattern.go` + `_test.go`: `Pattern`, `DetectPattern` (4 patterns + ambiguous).
-- [ ] 2.3 Patch `internal/assets/skills/sdd-spec/SKILL.md`: ETL delta sections + sidecar template.
-- [ ] 2.4 Patch `internal/assets/skills/sdd-design/SKILL.md`: DAG + insertion-point template.
+- [x] 2.1 `internal/etl/sidecar.go` + `_test.go`: `Sidecar`, `ParseSidecar`, `ValidateSidecar`.
+- [x] 2.2 `internal/etl/pattern.go` + `_test.go`: `Pattern`, `DetectPattern` (4 patterns + ambiguous).
+- [x] 2.3 Patch `internal/assets/skills/sdd-spec/SKILL.md`: ETL delta sections + sidecar template.
+- [x] 2.4 Patch `internal/assets/skills/sdd-design/SKILL.md`: DAG + insertion-point template.
 
 ## Phase 3: Apply + Verify Dual-Path
 

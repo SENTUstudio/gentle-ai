@@ -83,19 +83,103 @@ command/agent goldens changed; no non-deterministic content (timestamps/AI tags)
 
 ## Remaining Tasks
 
-Phase 2-8 are out of scope for this batch (do not implement):
-- [ ] 2.1–2.4 Spec + Design templates (`internal/etl/sidecar.go`, `pattern.go`, skill patches)
+Phase 3-8 are out of scope for this batch (do not implement):
 - [ ] 3.1–3.4 Apply + Verify dual-path (`internal/etl/header.go`, `compare.go`, skill patches)
 - [ ] 4a.1–4a.6, 4b.1–4b.2, 4c.1–4c.2, 4d.1 Skills foundation + embeds
 - [ ] 5.1–5.2 Tasks multi-repo + git flow
 
-## Workload / PR Boundary
+---
 
-- **Mode**: chained PR slice (PR 1 of 8)
-- **Current work unit**: Phase 1 — Detection + Config (`sddconfig` core + `sdd-config` CLI + `sdd-init` preflight)
-- **Boundary**: starts at task 1.1, ends at task 1.7. Self-contained: new `internal/sddconfig` package, thin `cli` entry, one-line `app` dispatch, `sdd-init` skill patch + golden refresh. No behavior change when `domain` is absent.
-- **Estimated review budget impact**: PR 1 forecast was ~730 lines. Real review surface (Go + skill patch + tests) is well under the 800-line budget. The 8 regenerated golden files add +312/−56 mechanical lines that are auto-generated references (diff verified to contain only the intended skill content) — reviewable as a sanity check, not line-by-line logic.
+# Phase 2: Spec + Design Templates
+
+**Phase**: 2 of 8 — Spec + Design Templates (`internal/etl` helpers + skill patches)
+**Mode**: Strict TDD (test runner: `go test ./...`)
+**Delivery**: chained PR slice (PR 2 of 8) under `feature-branch-chain`. Builds
+atop PR 1 on `feature/aws-dataengineer`. Backward compatibility preserved: the
+two skill patches add a conditional `if domain == "data-engineering"` branch;
+absent `domain` (app-dev) yields identical behaviour to today.
+
+## Completed Tasks
+
+- [x] 2.1 `internal/etl/sidecar.go` + `sidecar_test.go` — `Sidecar` (+`Column`, `Mismatch`), `ParseSidecar` (hand-rolled YAML scanner, no `yaml.v3`), `ValidateSidecar` (database/table/S3/column names + types/partitions match against `aws glue get-table` shape).
+- [x] 2.2 `internal/etl/pattern.go` + `pattern_test.go` — `Pattern` constants, `Markers` flag struct, `DetectPattern(markers) (Pattern, float64, string)` 4-pattern taxonomy with confidence table + ambiguity detection + partial-signal rationale for unknown.
+- [x] 2.3 Patch `internal/assets/skills/sdd-spec/SKILL.md` — `## Data-Engineering Domain Branch` gate (run `gentle-ai sdd-config --json`) + 6 ETL delta sections (Source Tables, Target Schema, Watermark Strategy, DAG, AWS Profile Requirements, Verify Approach) + table-output scenario convention + MODIFIED insertion-point template.
+- [x] 2.4 Patch `internal/assets/skills/sdd-design/SKILL.md` — `## Data-Engineering Domain Branch` gate + DAG-of-transformations template + pattern-aware design choice + MODIFICATION insertion-point analysis cascade template + ETL scenario coverage questions.
+
+## TDD Cycle Evidence
+
+| Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| 2.1 | `internal/etl/sidecar_test.go` | Unit | N/A (new package) | ✅ Written (undefined `ParseSidecar`/`ValidateSidecar`/`Mismatch`) | ✅ 15/15 passed | ✅ 15 cases (valid, missing database/column-type/name, malformed glue, quoted partitions/comments, extra partition) | ✅ Moved `Pattern`+constants out of `sidecar.go` into `pattern.go` for cohesion; kept shared helpers (`splitKeyValue`, `leadingSpaces`, `unquoteScalar`, `sliceToSet`) generic |
+| 2.2 | `internal/etl/pattern_test.go` | Unit | N/A (new) | ✅ Written (undefined `Markers`/`DetectPattern`/`Pattern*`) | ✅ 11/11 passed | ✅ 11 cases (3 incremental/glue-studio/legacy triangulations, ambiguous→highest-conf, partial-signal→unknown, struct equality, missed-marker suppression) | ✅ Refactored to single dispatch table `confidenceFor[pattern]` + `candidates[]{pattern,matched,rationale}`; one triangulation test (`LegacyWranglerSuppressedByGlueContext`) corrected — multi-step rule explicitly requires `!HasWranglerAthena`, so the contradiction falls to unknown (rationale names the partial signal) |
+| 2.3 | `internal/assets/skills/sdd-spec/SKILL.md` | N/A (markdown) | Golden tests (no-content regression — see below) | ➖ N/A (skill prompt) | ➖ N/A | ➖ Triangulation skipped: skill template validated by sdd-verify scenarios in Phase 3 | ➖ Conditional gate keeps app-dev flow byte-identical |
+| 2.4 | `internal/assets/skills/sdd-design/SKILL.md` | N/A (markdown) | Golden tests (no-content regression) | ➖ N/A | ➖ N/A | ➖ N/A | ➖ Conditional gate keeps app-dev flow byte-identical |
+
+### Test Summary (Phase 2)
+
+- **New Go tests written**: 26 (etl/sidecar 15 + etl/pattern 11) — total +26 over Phase 1's 41 → 67 cumulative across the change so far
+- **Etl package tests passing**: 26/26 (`ok internal/etl 2.563s`)
+- **Layers used**: Unit (26)
+- **Pure functions created**: `ParseSidecar`, `Sidecar.validateStructure`, `parseColumnsBlock`, `parseInlineColumn`, `splitFlowMapEntries`, `parseFlowSeq`, `unquoteScalar`, `splitKeyValue`, `leadingSpaces`, `ValidateSidecar`, `indexColumns`, `indexPartitionNames`, `partitionKeysSorted`, `sliceToSet`, `DetectPattern`, `rationaleFor`, `unknownRationale`.
+
+## Golden File Verification (Phase 2)
+
+The Phase 1 issue warned that any patch to `internal/assets/skills/*/SKILL.md`
+breaks golden tests. That is true ONLY for skills with a content golden
+snapshot. The injector golden tests snapshot `*-skill-sdd-init.golden` content
+for every adapter; `sdd-spec` and `sdd-design` are only presence-checked (every
+adapter except the sdd-init content golden). Consequently:
+
+- `TestGoldenSDD_*` (all adapters): ✅ PASS unchanged after the sdd-spec and
+  sdd-design patches. No golden regeneration needed for Phase 2.
+- `git diff testdata/golden/` after this batch: empty (no golden touched).
+
+This is a refinement of the Phase 1 issue note: future phases that patch
+`sdd-spec`/`sdd-design`/`sdd-apply`/`sdd-verify`/`sdd-tasks` (Phase 3-5) likely do
+NOT need golden regeneration either; only `sdd-init` content-goldens break on
+skill content patches. Re-verify phase-by-phase regardless.
+
+## Verification Results
+
+| Check | Command | Result |
+|---|---|---|
+| Build | `go build ./...` | ✅ PASS |
+| Etl package tests | `go test ./internal/etl/...` | ✅ PASS (26/26) |
+| Components golden (skill content) | `go test ./internal/components/ -run TestGoldenSDD` | ✅ PASS — sdd-spec/sdd-design content not snapshotted, so patches do not break any golden |
+| Full suite | `go test ./...` | ✅ No regressions — only the pre-existing flaky `TestRunInstallKimiMissingUVFailsBeforeExecutingInstallCommands` fails (identical to Phase 1 baseline) |
+| Vet | `go vet ./internal/etl/...` and `go vet ./...` | ✅ PASS (no warnings) |
+| gofmt | `gofmt -l internal/etl/` | ✅ Clean (post `gofmt -w`) |
+
+## Backward Compatibility (verified)
+
+- `internal/etl` is a brand-new additive package; no existing import touched.
+- `sdd-spec/SKILL.md` patch is a conditional branch: the new `## Data-Engineering Domain Branch` section is self-declared NO-OP when `domain != data-engineering`. The full `## What to Do` flow continues under a guard `gentle-ai sdd-config --json` → `.domain` check; absent domain skips Step 1a and the 6 ETL sections, yielding exactly the prior skill output.
+- `sdd-design/SKILL.md` patch is the same pattern: `## Data-Engineering Domain Branch` gated on `sdd-config`.
+- All non-ETL code paths in `internal/etl` are unreachable when the caller doesn't scan Glue jobs (Markers is filled by a content scanner; the sdd-* skills drive that).
+
+## Deviations from Design
+
+- **Pattern struct cohesion**: design's Interfaces block lists `Pattern` and `DetectPattern` under `internal/etl` but does not specify the file. I kept `Pattern`/`Markers`/`DetectPattern` together in `pattern.go` and `Sidecar`/`ParseSidecar`/`ValidateSidecar`/`Mismatch` in `sidecar.go` for pigeonhole reading. This is purely organizational; the package surface (exported identifiers) matches the contract exactly.
+- **Mismatch kinds named explicitly**: design says `ValidateSidecar` returns `[]Mismatch` but does not specify the `Kind` labels. I chose descriptive kinds (`database_mismatch`, `table_mismatch`, `s3_location_mismatch`, `missing_column`, `type_mismatch`, `missing_partition`, `unexpected_partition`) so spec/verify prose can branch on them consistently. Documented as constants `Mismatch*` so downstream phases bind to stable names.
+- **Confidence value absence in ambiguous unknown case**: when NO pattern matches, `DetectPattern` returns `("", 0, rationale)` — explanation names partial signals. This matches the design's "never silent" principle; the rationale makes the unknown useful (e.g. "watermark (incremental partial)").
+- **`HasSparkSqlQueryHelper` only check for glue-studio**: the heuristic line in the prompt lists both `HasApplyMapping && HasSparkSqlQueryHelper`. I implemented the AND (`&&`) form (both required) per the prompt; the `unknownRationale` then flags either as a partial. If the team prefers OR semantics, the test `TestDetectPatternGlueStudio` would need a paired triangulation. Flagged for the verify phase to confirm with the ETL domain lead.
+
+## Issues Found
+
+- One initial pattern test (`TestDetectPatternLegacyWranglerSuppressedByGlueContext`) asserted `PatternMultiStep` for `{HasWranglerAthena, HasGlueContext, HasTempViews}`, but the multi-step rule explicitly requires `!HasWranglerAthena` (the prompt spec). Corrected the test triangulation to expect unknown with a "awswrangler.athena" rationale mention. This is a test fix that aligns with the design contract — no behavioral ambiguity remains.
+- No other issues.
+
+## Workload / PR Boundary (Phase 2)
+
+- **Mode**: chained PR slice (PR 2 of 8) under `feature-branch-chain`. Targets the previous PR's branch (`feature/aws-dataengineer`, which carries Phase 1).
+- **Current work unit**: Phase 2 — Sidecar + Pattern + sdd-spec/sdd-design patches.
+- **Boundary**: starts at task 2.1, ends at task 2.4. Self-contained: additive `internal/etl` package (validated by unit tests); two embedded skill patches gated on `sdd-config --json`. No golden regeneration required; no new dependency added (`yaml.v3` deliberately avoided — hand-rolled scanner shares the project's existing convention).
+- **Estimated review budget impact**: PR 2 forecast was ~520 lines. Real review surface (Go + tests + skill patches) is within the 800-line budget. No golden file churn this round, so the diff is small and entirely readable.
 
 ## Status
 
-7/7 Phase 1 tasks complete. Ready for `sdd-apply` Phase 2 (or `sdd-verify` if the orchestrator prefers to verify this slice first).
+4/4 Phase 2 tasks complete. 67/67 cumulative Go tests passing across the
+change (Phase 1 41 + Phase 2 26). App-dev behaviour unchanged (`domain`
+absent → both skill branches are NO-OPs; etl package unused by app-dev
+callers). Ready for `sdd-apply` Phase 3 (Apply + Verify dual-path: header,
+compare, sdd-apply Camino A, sdd-verify Camino B).
