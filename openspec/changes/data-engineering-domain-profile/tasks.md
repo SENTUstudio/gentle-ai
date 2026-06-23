@@ -66,17 +66,17 @@ Chain strategy: stacked-to-main
 
 ## Phase 4b: Embed ETL Skills 1
 
-- [ ] 4b.1 Embed + patch `internal/assets/skills/data-engineer-etl-s3/SKILL.md`.
-- [ ] 4b.2 Embed + patch `internal/assets/skills/data-engineer-sql-from-logic/SKILL.md`.
+- [x] 4b.1 Embed + patch `internal/assets/skills/data-engineer-etl-s3/SKILL.md`.
+- [x] 4b.2 Embed + patch `internal/assets/skills/data-engineer-sql-from-logic/SKILL.md`.
 
 ## Phase 4c: Embed ETL Skills 2
 
-- [ ] 4c.1 Embed + patch `internal/assets/skills/data-engineer-etl-glue/SKILL.md`.
-- [ ] 4c.2 Embed + patch `internal/assets/skills/data-engineer-integrate/SKILL.md`.
+- [x] 4c.1 Embed + patch `internal/assets/skills/data-engineer-etl-glue/SKILL.md`.
+- [x] 4c.2 Embed + patch `internal/assets/skills/data-engineer-integrate/SKILL.md`.
 
 ## Phase 4d: Embed ETL Skills 3
 
-- [ ] 4d.1 Embed + patch `internal/assets/skills/data-engineer-etl-sharepoint/SKILL.md`.
+- [x] 4d.1 Embed + patch `internal/assets/skills/data-engineer-etl-sharepoint/SKILL.md`.
 
 ## Phase 5: Tasks Multi-Repo + Git Flow
 
