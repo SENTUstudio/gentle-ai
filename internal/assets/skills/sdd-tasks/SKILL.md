@@ -253,3 +253,39 @@ Return to the orchestrator:
 - **Size budget**: Tasks artifact MUST be under 530 words. Each task: 1-2 lines max. Use checklist format, not paragraphs.
 - **Review workload guard**: ALWAYS include the Review Workload Forecast. If likely above 400 changed lines, recommend chained PRs and honor the received delivery strategy for whether a decision/exception is needed before apply.
 - Return envelope per **Section D** from `skills/_shared/sdd-phase-common.md`.
+
+## Data-Engineering Domain Branch
+
+When `gentle-ai sdd-config --json` reports `domain: "data-engineering"` (or the equivalent config field is set):
+
+### Repo Prefix
+
+Each task that touches a company repo MUST be annotated with the repo prefix:
+
+- `[infra]` — task touches `glue-tables/*.yaml` (SAM template for Glue Catalog table definition)
+- `[carga]` — task touches `glue-jobs/*.py` (Spark ETL script)
+- `[both]` — task touches both repos (coordinated two-repo dance)
+- No prefix — task touches the master project only (openspec/, docs/, scripts)
+
+Use `etl.RepoPrefix(taskTarget)` to determine the prefix automatically based on file paths.
+
+### Git Flow Annotation
+
+Tasks MUST annotate which git workflow applies:
+
+- Master project tasks → **GitHub Flow** (`branch-pr` skill applies): `feature/ → PR → main`
+- Company repo tasks (`[infra]`/`[carga]`/`[both]`) → **Bitbucket GitFlow**: `feature/ → PR → develop → validate → clone to release/`
+- Hotfix path: inject directly into `release/` (bypasses develop)
+
+Document the git flow in the Review Workload Forecast section so the reviewer knows which PR conventions apply per task.
+
+### Example Task Format
+
+```
+- [ ] 1.1 [infra] Update `glue-tables/posventa_retencion.yaml` — add rut_final_dv column.
+      Git flow: Bitbucket (feature → develop → release).
+- [ ] 1.2 [carga] Update `glue-jobs/etl_posventa_predictivo.py` — add rut_final formatting.
+      Git flow: Bitbucket (feature → develop → release).
+- [ ] 1.3 Update `openspec/changes/.../spec.md` — document the schema change.
+      Git flow: GitHub (feature → main).
+```

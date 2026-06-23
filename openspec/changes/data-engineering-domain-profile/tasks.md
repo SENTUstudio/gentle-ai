@@ -80,5 +80,5 @@ Chain strategy: stacked-to-main
 
 ## Phase 5: Tasks Multi-Repo + Git Flow
 
-- [ ] 5.1 `internal/etl/tasks.go` + `_test.go`: `RepoPrefix`, `GitFlowForRepo`.
-- [ ] 5.2 Patch `internal/assets/skills/sdd-tasks/SKILL.md`: emit `repo: infra|carga|both` prefix + git-flow annotation.
+- [x] 5.1 `internal/etl/tasks.go` + `_test.go`: `RepoPrefix`, `GitFlowForRepo`.
+- [x] 5.2 Patch `internal/assets/skills/sdd-tasks/SKILL.md`: emit `repo: infra|carga|both` prefix + git-flow annotation.
