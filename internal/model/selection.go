@@ -31,6 +31,43 @@ func (s Selection) HasAgent(agent AgentID) bool {
 	return false
 }
 
+// DefaultModelsForDomain returns recommended model assignments per SDD phase for a given domain.
+// Empty domain or "app-dev" returns app-dev defaults. "data-engineering" returns DE defaults.
+// Data-engineering needs higher tiers because data profiling and schema design require more judgment.
+//
+// Model tiers (based on user's opencode-go providers):
+//   Light:  mimo-v2.5 (high)         — mechanical tasks (archive)
+//   Mid:    minimax-m3 (thinking)    — reasoning tasks (explore, design)
+//           kimi-k2.7-code           — coding specialist (spec, tasks, verify)
+//   High:   glm-5.2 (max)            — heavy reasoning (propose, apply)
+//           deepseek-v4-pro (high)   — init/onboard
+func DefaultModelsForDomain(domain string) map[string]ModelAssignment {
+	switch domain {
+	case "data-engineering":
+		return map[string]ModelAssignment{
+			"sdd-explore":  {ProviderID: "opencode-go", ModelID: "glm-5.2", Effort: "max"},        // upgraded: data profiling needs heavy reasoning
+			"sdd-propose":  {ProviderID: "opencode-go", ModelID: "glm-5.2", Effort: "max"},
+			"sdd-spec":     {ProviderID: "opencode-go", ModelID: "minimax-m3", Effort: "thinking"}, // upgraded: schema + DAG needs reasoning
+			"sdd-design":   {ProviderID: "opencode-go", ModelID: "minimax-m3", Effort: "thinking"},
+			"sdd-tasks":    {ProviderID: "opencode-go", ModelID: "kimi-k2.7-code"},
+			"sdd-apply":    {ProviderID: "opencode-go", ModelID: "glm-5.2", Effort: "max"},
+			"sdd-verify":   {ProviderID: "opencode-go", ModelID: "kimi-k2.7-code"},
+			"sdd-archive":  {ProviderID: "opencode-go", ModelID: "mimo-v2.5", Effort: "high"},
+		}
+	default: // app-dev or empty — matches user's current opencode.json config
+		return map[string]ModelAssignment{
+			"sdd-explore":  {ProviderID: "opencode-go", ModelID: "minimax-m3", Effort: "thinking"},
+			"sdd-propose":  {ProviderID: "opencode-go", ModelID: "glm-5.2", Effort: "max"},
+			"sdd-spec":     {ProviderID: "opencode-go", ModelID: "kimi-k2.7-code"},
+			"sdd-design":   {ProviderID: "opencode-go", ModelID: "minimax-m3", Effort: "thinking"},
+			"sdd-tasks":    {ProviderID: "opencode-go", ModelID: "kimi-k2.7-code"},
+			"sdd-apply":    {ProviderID: "opencode-go", ModelID: "glm-5.2", Effort: "max"},
+			"sdd-verify":   {ProviderID: "opencode-go", ModelID: "kimi-k2.7-code"},
+			"sdd-archive":  {ProviderID: "opencode-go", ModelID: "mimo-v2.5", Effort: "high"},
+		}
+	}
+}
+
 func (s Selection) HasComponent(component ComponentID) bool {
 	for _, current := range s.Components {
 		if current == component {

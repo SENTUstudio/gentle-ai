@@ -48,10 +48,141 @@ From the orchestrator:
 - **hybrid**: Follow BOTH conventions — persist to Engram (single concatenated artifact) AND write domain files to filesystem.
 - **none**: Return result only. Never create or modify project files.
 
+## Data-Engineering Domain Branch
+
+> **GATE**: Run `gentle-ai sdd-config --json` once at the start of the phase.
+> If `domain == "data-engineering"`, follow THIS section AND the rest of the
+> skill as the outer container. If `domain` is absent or anything else, the
+> instructions below are a NO-OP — execute the rest of the skill exactly as
+> before (app-dev behavior is untouched). Never infer the domain from the prompt.
+
+When the gate is active, the delta spec you write **MUST** be augmented with the
+six ETL sections below, in addition to the standard `## ADDED` / `## MODIFIED`
+scenario blocks. Behavioral scenarios for ETL jobs assert **TABLE OUTPUT** (row
+counts, EXCEPT comparisons, parity dev-vs-prd), NOT function output — because
+the contract of a Glue job is the table it materializes, not the values its
+helper functions return.
+
+For MODIFIED Glue jobs, additionally document the **insertion point** (the
+stage or temp view after which the new logic lands) and the **regression
+expectation** (which existing temp views/target stages must remain
+byte-identical, and which now extend with the new behavior).
+
+### ETL Delta Sections (emit when domain == data-engineering)
+
+```markdown
+## Source Tables
+
+| Database.Table | Sidecar | Profile | Notes |
+|----------------|---------|---------|-------|
+| `db_….<table>` | `glue-tables/<db>.<table>.yaml` | `dev` | <purpose> |
+
+Each source row MUST reference a sidecar file. The sidecar's columns/partitions
+are structurally validated against `aws glue get-table` output by
+`internal/etl.ValidateSidecar`.
+
+## Target Schema
+
+- Database: `<target db>`
+- Table: `<target table>`
+- Sidecar: `glue-tables/<db>.<table>.yaml` (mandatory; one sidecar per target)
+- Columns: listed in the sidecar; duplicate them here ONLY for the columns the
+  change introduces or alters.
+
+## Watermark Strategy
+
+(Required when sdd-design reports the `incremental` pattern.)
+- Watermark column: `<column>`
+- Lower bound source: previous run's high-watermark (state store / control table)
+- Upper bound source: source table's MAX(<watermark column>)
+- Replay semantics: idempotent on watermark range re-execution
+
+## DAG
+
+Render the transformation pipeline as text or mermaid. Nodes = sources, temp
+views, target table. Edges = data dependencies.
+
+```text
+[source db_dl_dev_stg_encuestas.encuestas_csi] --+--> [tmp_survey_clean]
+                                                  +--> [tmp_survey_scores]
+[tmp_survey_clean] --+--> [tmp_rollup_month]
+[tmp_survey_scores] -+
+[tmp_rollup_month] -----> [db_dl_dev_ref.encuestas_csi_ref]
+```
+
+## AWS Profile Requirements
+
+List which logical profiles the change touches (resolved by
+`gentle-ai sdd-config --json` to the configured CLI profile names — never
+write real account IDs into artifacts).
+
+| Logical | Purpose |
+|---------|---------|
+| `dev` | source read + target write (Camino A TDD) |
+| `prd` | Camino B parity compare |
+| `usuario` | interactive exploration (optional) |
+
+## Verify Approach
+
+- **Camino A (TDD)** — apply phase writes the Glue job under TDD: scaffold is
+  chosen by `internal/etl.DetectPattern` (watermark test / multi-step DAG test /
+  Athena-Spark parity test). Be explicit here about WHICH scaffold the apply
+  phase SHALL pick, based on the pattern declared above.
+- **Camino B (deploy)** — verify phase runs `sam deploy` on both repos
+  (parallel; `verify.skip_deploy` short-circuits to sidecar + EXCEPT-only),
+  then `internal/etl.BuildExceptSQL` dev-vs-prd, then
+  `internal/etl.ValidateSidecar` against `aws glue get-table`.
+
+### Scenario assertion convention (ETL)
+
+Every behavioral scenario for an ETL job MUST assert table-level outcomes:
+
+- GIVEN `<source table state>` (rows, watermark range)
+- WHEN `<job runs>`
+- THEN `<target table rows>` — assert via `EXCEPT dev-vs-prd` (parity), or
+  explicit row count, or column-level diff. NEVER assert "function X returns Y".
+- AND `<idempotency/regression expectation>` (e.g. re-run produces zero new rows
+  under a frozen watermark window)
+
+### Modification insertion-point template (ETL — MODIFIED only)
+
+When the change modifies an existing Glue job, the delta MUST include:
+
+```markdown
+### Insertion Point
+
+- Insert AFTER: `<stage / temp view name>` (the last stage that must remain
+  byte-identical)
+- Insert BEFORE: `<downstream stage>` (the first stage that extends)
+- Cascade impact: stages `[<list>]` change output shape; stages `[<list>]`
+  stay byte-identical (regression baseline).
+
+### Regression Expectation
+
+- Stages `[<unchanged stage list>]` MUST produce identical rows pre/post change
+  under the same source window (asserted by Camino A's EXCEPT on dev control
+  vs new dev run, and Camino B's dev-vs-prd EXCEPT on the unchanged stages).
+- Stages `[<extended stage list>]` are allowed to produce new/changed rows —
+  assert by the scenarios above.
+```
+
 ## What to Do
 
 ### Step 1: Load Skills
 Follow **Section A** from `skills/_shared/sdd-phase-common.md`.
+
+### Step 1a (data-engineering only): Resolve Domain
+
+If you entered the **Data-Engineering Domain Branch** above (the gate passed),
+resolve the domain ONCE here and cache it for the rest of the phase:
+
+```bash
+gentle-ai sdd-config --json
+```
+
+Parse `.domain`. If `data-engineering`, the ETL delta sections above are
+MANDATORY. If absent, skip them and proceed with the app-dev flow below — the
+rest of this skill is identical to its prior behavior.
 
 ### Step 2: Identify Affected Domains
 

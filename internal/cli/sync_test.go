@@ -10,6 +10,7 @@ import (
 
 	"github.com/gentleman-programming/gentle-ai/internal/agents"
 	"github.com/gentleman-programming/gentle-ai/internal/backup"
+	"github.com/gentleman-programming/gentle-ai/internal/components/sdd"
 	"github.com/gentleman-programming/gentle-ai/internal/model"
 	"github.com/gentleman-programming/gentle-ai/internal/state"
 	"github.com/gentleman-programming/gentle-ai/internal/verify"
@@ -1357,6 +1358,154 @@ func TestRunSyncDetectsExistingProfilesOnRegularSync(t *testing.T) {
 		t.Errorf("run2 (regular sync): profile orchestrator prompt should preserve JD delegation mapping after DetectProfiles re-sync")
 	}
 	_ = result2 // result2 may or may not be no-op depending on whether profile overlay is idempotent
+}
+
+// TestRunSyncDomainCollisionError verifies the sync collision guard: when an
+// explicit profile reuses the name of an existing on-disk profile that was
+// created for a different effective domain, sync returns a wrapped error from
+// EnsureProfileDomainConsistency naming the colliding profile and domain.
+//
+// opencode.json carries no domain field by design (Q3=A), so a profile created
+// for app-dev is always detected with Domain="". Syncing an explicit profile
+// stamped for data-engineering under the same name is therefore a collision.
+func TestRunSyncDomainCollisionError(t *testing.T) {
+	home := t.TempDir()
+	restoreHome := osUserHomeDir
+	restoreBackupHome := backup.UserHomeDirFn
+	restoreCommand := runCommand
+	restoreLookPath := cmdLookPath
+	t.Cleanup(func() {
+		osUserHomeDir = restoreHome
+		backup.UserHomeDirFn = restoreBackupHome
+		runCommand = restoreCommand
+		cmdLookPath = restoreLookPath
+	})
+	osUserHomeDir = func() (string, error) { return home, nil }
+	backup.UserHomeDirFn = func() (string, error) { return home, nil }
+	runCommand = func(string, ...string) error { return nil }
+	cmdLookPath = func(name string) (string, error) { return "/usr/local/bin/" + name, nil }
+
+	components := []model.ComponentID{
+		model.ComponentSDD,
+		model.ComponentEngram,
+		model.ComponentContext7,
+		model.ComponentGGA,
+		model.ComponentSkills,
+	}
+
+	// Run 1: create profile "cheap" with Domain="" (app-dev default). The
+	// generated opencode.json has no domain field, so DetectProfiles later
+	// returns Domain="" for it.
+	selCreate := model.Selection{
+		Agents:     []model.AgentID{model.AgentOpenCode},
+		Components: components,
+		SDDMode:    model.SDDModeSingle,
+		Profiles: []model.Profile{{
+			Name: "cheap",
+			OrchestratorModel: model.ModelAssignment{
+				ProviderID: "anthropic",
+				ModelID:    "claude-haiku-3-5-20241022",
+			},
+		}},
+	}
+	if _, err := RunSyncWithSelection(home, selCreate); err != nil {
+		t.Fatalf("RunSyncWithSelection() run1 (create cheap app-dev) error = %v", err)
+	}
+
+	// Precondition: the on-disk profile is detected with an empty domain.
+	settingsPath := filepath.Join(home, ".config", "opencode", "opencode.json")
+	detected, derr := sdd.DetectProfiles(settingsPath)
+	if derr != nil {
+		t.Fatalf("DetectProfiles() error = %v", derr)
+	}
+	if len(detected) != 1 || detected[0].Name != "cheap" || detected[0].Domain != "" {
+		t.Fatalf("detected = %+v, want exactly one profile 'cheap' with empty domain", detected)
+	}
+
+	// Run 2: sync explicit cheap stamped for data-engineering. Same name, but
+	// effective domain differs from the on-disk app-dev profile → the collision
+	// guard must reject the sync with a wrapped error.
+	selCollide := model.Selection{
+		Agents:     []model.AgentID{model.AgentOpenCode},
+		Components: components,
+		SDDMode:    model.SDDModeSingle,
+		Profiles: []model.Profile{{
+			Name:   "cheap",
+			Domain: "data-engineering",
+			OrchestratorModel: model.ModelAssignment{
+				ProviderID: "anthropic",
+				ModelID:    "claude-haiku-3-5-20241022",
+			},
+		}},
+	}
+	_, err := RunSyncWithSelection(home, selCollide)
+	if err == nil {
+		t.Fatal("RunSyncWithSelection() run2 expected domain collision error, got nil")
+	}
+	msg := err.Error()
+	for _, want := range []string{"sync sdd profile domain collision", "cheap", "domain", "data-engineering"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("collision error %q missing substring %q", msg, want)
+		}
+	}
+}
+
+// TestRunSyncDomainConsistency_AllowsSameEffectiveDomain is the triangulation
+// companion to TestRunSyncDomainCollisionError: re-syncing an explicit profile
+// whose effective domain matches the on-disk profile MUST succeed. This proves
+// the guard distinguishes a real collision from a benign re-sync — an
+// always-error guard would pass the collision test but fail this one. It also
+// pins the "" == "app-dev" equivalence at the sync wiring layer.
+func TestRunSyncDomainConsistency_AllowsSameEffectiveDomain(t *testing.T) {
+	home := t.TempDir()
+	restoreHome := osUserHomeDir
+	restoreBackupHome := backup.UserHomeDirFn
+	restoreCommand := runCommand
+	restoreLookPath := cmdLookPath
+	t.Cleanup(func() {
+		osUserHomeDir = restoreHome
+		backup.UserHomeDirFn = restoreBackupHome
+		runCommand = restoreCommand
+		cmdLookPath = restoreLookPath
+	})
+	osUserHomeDir = func() (string, error) { return home, nil }
+	backup.UserHomeDirFn = func() (string, error) { return home, nil }
+	runCommand = func(string, ...string) error { return nil }
+	cmdLookPath = func(name string) (string, error) { return "/usr/local/bin/" + name, nil }
+
+	components := []model.ComponentID{
+		model.ComponentSDD,
+		model.ComponentEngram,
+		model.ComponentContext7,
+		model.ComponentGGA,
+		model.ComponentSkills,
+	}
+	base := model.Profile{
+		Name: "cheap",
+		OrchestratorModel: model.ModelAssignment{
+			ProviderID: "anthropic",
+			ModelID:    "claude-haiku-3-5-20241022",
+		},
+	}
+	sel := model.Selection{
+		Agents:     []model.AgentID{model.AgentOpenCode},
+		Components: components,
+		SDDMode:    model.SDDModeSingle,
+		Profiles:   []model.Profile{base},
+	}
+
+	// Run 1: create cheap with Domain="" (app-dev default).
+	if _, err := RunSyncWithSelection(home, sel); err != nil {
+		t.Fatalf("RunSyncWithSelection() run1 error = %v", err)
+	}
+
+	// Run 2: re-sync cheap stamped Domain="app-dev" — same effective domain as
+	// the on-disk "" profile. The guard MUST NOT treat this as a collision.
+	base.Domain = "app-dev"
+	sel.Profiles = []model.Profile{base}
+	if _, err := RunSyncWithSelection(home, sel); err != nil {
+		t.Fatalf("RunSyncWithSelection() run2 (same effective domain) expected success, got: %v", err)
+	}
 }
 
 func TestRunSyncExternalSingleActiveSkipsDetectAndPreservesOrchestratorPrompt(t *testing.T) {
@@ -2994,5 +3143,212 @@ func TestRunSync_RestoresCodexPhaseModelAssignments(t *testing.T) {
 	}
 	if strings.Contains(text, "| `sdd-strong` |") {
 		t.Fatalf("AGENTS.md rendered carril table instead of Custom per-phase table; got:\n%s", text)
+	}
+}
+
+// ─── R-PROF-31: Missing model warning during sync ──────────────────────────
+
+// writeTestModelCache writes a minimal models.json cache file at path.
+func writeTestModelCache(t *testing.T, path, modelsJSON string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(path, []byte(modelsJSON), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+}
+
+const testCacheWithHaiku = `{
+  "anthropic": {
+    "name": "Anthropic",
+    "models": {
+      "claude-haiku-3-5": {"id": "claude-haiku-3-5", "name": "Claude Haiku 3.5", "tool_call": true}
+    }
+  }
+}`
+
+// TestValidateProfileModelAssignments_WarnsOnUnknownModel verifies that a
+// profile sub-agent referencing a model absent from the cache produces a
+// warning naming the agent key and the unknown model ID (R-PROF-31).
+func TestValidateProfileModelAssignments_WarnsOnUnknownModel(t *testing.T) {
+	cachePath := filepath.Join(t.TempDir(), "models.json")
+	writeTestModelCache(t, cachePath, testCacheWithHaiku)
+
+	profiles := []model.Profile{
+		{
+			Name: "cheap",
+			OrchestratorModel: model.ModelAssignment{
+				ProviderID: "anthropic",
+				ModelID:    "claude-haiku-3-5",
+			},
+			PhaseAssignments: map[string]model.ModelAssignment{
+				"sdd-apply": {ProviderID: "anthropic", ModelID: "old-model-id"},
+			},
+		},
+	}
+
+	warnings := validateProfileModelAssignments(profiles, cachePath)
+
+	found := false
+	for _, w := range warnings {
+		if strings.Contains(w, "sdd-apply-cheap") && strings.Contains(w, "old-model-id") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected a warning mentioning 'sdd-apply-cheap' and 'old-model-id', got %v", warnings)
+	}
+
+	// The known orchestrator model (claude-haiku-3-5) must NOT produce a warning.
+	for _, w := range warnings {
+		if strings.Contains(w, "sdd-orchestrator-cheap") {
+			t.Errorf("known orchestrator model should not warn, got %q", w)
+		}
+	}
+}
+
+// TestValidateProfileModelAssignments_NoWarningsWhenCacheMissing verifies that
+// when the cache file does not exist, no warnings are emitted (there is nothing
+// to validate against — warning on every model would be noise).
+func TestValidateProfileModelAssignments_NoWarningsWhenCacheMissing(t *testing.T) {
+	cachePath := filepath.Join(t.TempDir(), "nonexistent", "models.json")
+
+	profiles := []model.Profile{
+		{
+			Name: "cheap",
+			OrchestratorModel: model.ModelAssignment{
+				ProviderID: "anthropic",
+				ModelID:    "claude-haiku-3-5",
+			},
+		},
+	}
+
+	warnings := validateProfileModelAssignments(profiles, cachePath)
+	if len(warnings) != 0 {
+		t.Errorf("expected no warnings when cache file is missing, got %v", warnings)
+	}
+}
+
+// TestValidateProfileModelAssignments_NoWarningsForKnownModels verifies that
+// profiles whose models all exist in the cache produce zero warnings.
+func TestValidateProfileModelAssignments_NoWarningsForKnownModels(t *testing.T) {
+	cachePath := filepath.Join(t.TempDir(), "models.json")
+	writeTestModelCache(t, cachePath, testCacheWithHaiku)
+
+	profiles := []model.Profile{
+		{
+			Name: "cheap",
+			OrchestratorModel: model.ModelAssignment{
+				ProviderID: "anthropic",
+				ModelID:    "claude-haiku-3-5",
+			},
+			PhaseAssignments: map[string]model.ModelAssignment{
+				"sdd-apply": {ProviderID: "anthropic", ModelID: "claude-haiku-3-5"},
+			},
+		},
+	}
+
+	warnings := validateProfileModelAssignments(profiles, cachePath)
+	if len(warnings) != 0 {
+		t.Errorf("expected no warnings when all models are known, got %v", warnings)
+	}
+}
+
+// TestRunSyncWithSelection_WarnsOnUnknownProfileModel is the R-PROF-31
+// integration test: running sync with a profile that references a model absent
+// from the OpenCode cache must populate SyncResult.Warnings and preserve the
+// model assignment (no hard error).
+func TestRunSyncWithSelection_WarnsOnUnknownProfileModel(t *testing.T) {
+	home := t.TempDir()
+	restoreCommand := runCommand
+	restoreLookPath := cmdLookPath
+	t.Cleanup(func() {
+		runCommand = restoreCommand
+		cmdLookPath = restoreLookPath
+	})
+	runCommand = func(string, ...string) error { return nil }
+	cmdLookPath = func(name string) (string, error) { return "/usr/local/bin/" + name, nil }
+
+	// Write a model cache that contains claude-haiku-3-5 but NOT old-model-id.
+	cachePath := filepath.Join(home, ".cache", "opencode", "models.json")
+	writeTestModelCache(t, cachePath, testCacheWithHaiku)
+
+	profiles := []model.Profile{
+		{
+			Name: "cheap",
+			OrchestratorModel: model.ModelAssignment{
+				ProviderID: "anthropic",
+				ModelID:    "claude-haiku-3-5",
+			},
+			PhaseAssignments: map[string]model.ModelAssignment{
+				"sdd-apply": {ProviderID: "anthropic", ModelID: "old-model-id"},
+			},
+		},
+	}
+
+	sel := model.Selection{
+		Agents: []model.AgentID{model.AgentOpenCode},
+		Components: []model.ComponentID{
+			model.ComponentSDD,
+			model.ComponentEngram,
+			model.ComponentContext7,
+			model.ComponentGGA,
+			model.ComponentSkills,
+		},
+		SDDMode:  model.SDDModeSingle,
+		Profiles: profiles,
+	}
+
+	result, err := RunSyncWithSelection(home, sel)
+	if err != nil {
+		t.Fatalf("RunSyncWithSelection() error = %v", err)
+	}
+
+	// A warning must be recorded for the unknown model.
+	found := false
+	for _, w := range result.Warnings {
+		if strings.Contains(w, "old-model-id") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("SyncResult.Warnings should mention 'old-model-id', got %v", result.Warnings)
+	}
+
+	// The model assignment must be preserved in opencode.json (not cleared).
+	settingsPath := filepath.Join(home, ".config", "opencode", "opencode.json")
+	settingsData, readErr := os.ReadFile(settingsPath)
+	if readErr != nil {
+		t.Fatalf("ReadFile(%q) error = %v", settingsPath, readErr)
+	}
+	if !strings.Contains(string(settingsData), "old-model-id") {
+		t.Errorf("opencode.json should still contain 'old-model-id' (model preserved), got:\n%s", string(settingsData))
+	}
+}
+
+// TestRenderSyncReportIncludesWarnings verifies that RenderSyncReport surfaces
+// collected warnings so they are visible to the user (not only on stderr).
+func TestRenderSyncReportIncludesWarnings(t *testing.T) {
+	result := SyncResult{
+		NoOp:   false,
+		Agents: []model.AgentID{model.AgentOpenCode},
+		Selection: model.Selection{
+			Components: []model.ComponentID{model.ComponentSDD},
+		},
+		FilesChanged: 1,
+		Warnings: []string{
+			"sdd-apply-cheap references unknown model old-model-id",
+		},
+		Verify: verify.Report{Ready: true},
+	}
+
+	report := RenderSyncReport(result)
+
+	if !strings.Contains(report, "old-model-id") {
+		t.Errorf("RenderSyncReport() should include the warning text; got:\n%s", report)
+	}
+	if !strings.Contains(strings.ToLower(report), "warning") {
+		t.Errorf("RenderSyncReport() should label warnings as such; got:\n%s", report)
 	}
 }

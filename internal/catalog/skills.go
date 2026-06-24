@@ -35,6 +35,18 @@ var mvpSkills = []Skill{
 	{ID: model.SkillCognitiveDoc, Name: "cognitive-doc-design", Category: "workflow", Priority: "p0"},
 	{ID: model.SkillCommentWriter, Name: "comment-writer", Category: "workflow", Priority: "p0"},
 	{ID: model.SkillWorkUnitCommits, Name: "work-unit-commits", Category: "workflow", Priority: "p0"},
+	// Data-engineering domain skills. Category "data-engineering" distinguishes
+	// them from the general-purpose workflow skills; priority "p1" reflects
+	// that they activate only under the optional domain: data-engineering
+	// profile (never installed by default in the minimal preset).
+	{ID: model.SkillDataEngineerPatternDetect, Name: "data-engineer-pattern-detect", Category: "data-engineering", Priority: "p1"},
+	{ID: model.SkillDataEngineerStudyFile, Name: "data-engineer-study-file", Category: "data-engineering", Priority: "p1"},
+	{ID: model.SkillDataEngineerETLS3, Name: "data-engineer-etl-s3", Category: "data-engineering", Priority: "p1"},
+	{ID: model.SkillDataEngineerETLGlue, Name: "data-engineer-etl-glue", Category: "data-engineering", Priority: "p1"},
+	{ID: model.SkillDataEngineerETLSharepoint, Name: "data-engineer-etl-sharepoint", Category: "data-engineering", Priority: "p1"},
+	{ID: model.SkillDataEngineerCreateTable, Name: "data-engineer-create-table", Category: "data-engineering", Priority: "p1"},
+	{ID: model.SkillDataEngineerSQLFromLogic, Name: "data-engineer-sql-from-logic", Category: "data-engineering", Priority: "p1"},
+	{ID: model.SkillDataEngineerIntegrate, Name: "data-engineer-integrate", Category: "data-engineering", Priority: "p1"},
 }
 
 func MVPSkills() []Skill {

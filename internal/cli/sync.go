@@ -21,6 +21,7 @@ import (
 	"github.com/gentleman-programming/gentle-ai/internal/components/skills"
 	"github.com/gentleman-programming/gentle-ai/internal/components/theme"
 	"github.com/gentleman-programming/gentle-ai/internal/model"
+	"github.com/gentleman-programming/gentle-ai/internal/opencode"
 	"github.com/gentleman-programming/gentle-ai/internal/pipeline"
 	"github.com/gentleman-programming/gentle-ai/internal/state"
 	"github.com/gentleman-programming/gentle-ai/internal/verify"
@@ -67,6 +68,11 @@ type SyncResult struct {
 	// processed during this sync. Paths appear once even when multiple
 	// components touch the same file. It is nil when no files changed.
 	ChangedFiles []string
+	// Warnings collects non-fatal issues detected during sync, such as a
+	// profile sub-agent referencing a model no longer present in the OpenCode
+	// model cache (R-PROF-31). Warnings do not block sync — the existing model
+	// assignment is preserved.
+	Warnings []string
 }
 
 // ParseSyncFlags parses the CLI arguments for the sync subcommand.
@@ -382,6 +388,7 @@ type syncRuntime struct {
 	backupRoot   string
 	state        *runtimeState
 	changedFiles []string // accumulates absolute paths of files that actually changed
+	warnings     []string // accumulates non-fatal warnings (e.g. unknown profile model IDs)
 }
 
 func newSyncRuntime(homeDir string, selection model.Selection) (*syncRuntime, error) {
@@ -434,6 +441,7 @@ func (r *syncRuntime) stagePlan() pipeline.StagePlan {
 			agents:       r.agentIDs,
 			selection:    r.selection,
 			changedFiles: &r.changedFiles,
+			warnings:     &r.warnings,
 		})
 	}
 
@@ -555,6 +563,7 @@ type componentSyncStep struct {
 	agents       []model.AgentID
 	selection    model.Selection
 	changedFiles *[]string // accumulates absolute paths of files that actually changed
+	warnings     *[]string // accumulates non-fatal warnings (e.g. unknown profile model IDs)
 }
 
 func (s componentSyncStep) ID() string {
@@ -607,7 +616,14 @@ func (s componentSyncStep) Run() error {
 		//   from disk so their orchestrator prompts are refreshed from updated embedded
 		//   assets while model assignments are preserved.
 		profiles := s.selection.Profiles
-		if len(profiles) == 0 && profileStrategy != model.SDDProfileStrategyExternalSingleActive {
+
+		// Detect existing named profiles on disk. The detected set is used both
+		// to refresh prompts on a regular re-sync (no explicit profiles) AND to
+		// guard against domain collisions when explicit profiles are synced.
+		// opencode.json carries no domain field by design (Q3=A), so detected
+		// profiles always have Domain="" (app-dev).
+		var detected []model.Profile
+		if profileStrategy != model.SDDProfileStrategyExternalSingleActive {
 			settingsPath := ""
 			for _, adapter := range adapters {
 				if adapter.Agent() == model.AgentOpenCode {
@@ -616,12 +632,27 @@ func (s componentSyncStep) Run() error {
 				}
 			}
 			if settingsPath != "" {
-				detected, detectErr := sdd.DetectProfiles(settingsPath)
-				if detectErr == nil {
-					profiles = detected
+				if d, detectErr := sdd.DetectProfiles(settingsPath); detectErr == nil {
+					detected = d
 				}
 				// If detect fails (e.g. file missing), silently skip — no profiles to refresh.
 			}
+		}
+
+		// Collision guard: an explicit profile must not reuse the name of an
+		// existing on-disk profile that was created for a different effective
+		// domain ("" and "app-dev" are treated as equivalent). Detected-vs-
+		// explicit is the only pairing that can collide; a profile can never
+		// collide with itself, so the guard is skipped when no explicit profiles
+		// are provided.
+		if len(s.selection.Profiles) > 0 {
+			if err := sdd.EnsureProfileDomainConsistency(detected, s.selection.Profiles); err != nil {
+				return fmt.Errorf("sync sdd profile domain collision: %w", err)
+			}
+		}
+
+		if len(profiles) == 0 && profileStrategy != model.SDDProfileStrategyExternalSingleActive {
+			profiles = detected
 		}
 
 		// If profiles exist (explicit or detected), SDDModeMulti is required:
@@ -632,6 +663,14 @@ func (s componentSyncStep) Run() error {
 		} else if len(profiles) > 0 && sddMode == "" {
 			sddMode = model.SDDModeMulti
 		}
+
+		// R-PROF-31: validate profile model assignments against the OpenCode
+		// model cache and emit warnings for any model that no longer exists.
+		// The existing assignment is preserved (model preservation is handled
+		// by the deep-merge in GenerateProfileOverlay); warnings are non-fatal.
+		cachePath := filepath.Join(s.homeDir, ".cache", "opencode", "models.json")
+		warnings := validateProfileModelAssignments(profiles, cachePath)
+		s.appendWarnings(warnings...)
 
 		for _, adapter := range adapters {
 			targetDir := componentInjectionDir(s.homeDir, s.workspaceDir, adapter)
@@ -749,6 +788,72 @@ func (s componentSyncStep) countChanged(n int, files ...string) {
 	}
 }
 
+// appendWarnings records non-fatal warnings (nil-safe).
+func (s componentSyncStep) appendWarnings(warnings ...string) {
+	if s.warnings != nil && len(warnings) > 0 {
+		*s.warnings = append(*s.warnings, warnings...)
+	}
+}
+
+// validateProfileModelAssignments checks each profile's model assignments
+// against the models available in the OpenCode cache. For every profile
+// orchestrator or sub-agent that references a model absent from the cache, a
+// warning string is returned naming the agent key and the unknown model ID.
+//
+// When the cache file does not exist or cannot be parsed, no warnings are
+// emitted — there is nothing to validate against, and warning on every model
+// would be noise. This satisfies R-PROF-31: "sync MUST emit a warning and
+// preserve the existing model assignment. This MUST NOT be a hard error."
+func validateProfileModelAssignments(profiles []model.Profile, cachePath string) []string {
+	if len(profiles) == 0 {
+		return nil
+	}
+	// Skip validation when the cache file does not exist.
+	if _, err := os.Stat(cachePath); err != nil {
+		return nil
+	}
+	providers, err := opencode.LoadModels(cachePath)
+	if err != nil {
+		return nil // unparseable cache — don't block sync with warnings
+	}
+	if len(providers) == 0 {
+		return nil
+	}
+
+	var warnings []string
+	for _, p := range profiles {
+		if p.OrchestratorModel.ProviderID != "" && p.OrchestratorModel.ModelID != "" {
+			if !modelExistsInCache(providers, p.OrchestratorModel) {
+				agentKey := "sdd-orchestrator-" + p.Name
+				warnings = append(warnings, fmt.Sprintf("%s references unknown model %s", agentKey, p.OrchestratorModel.ModelID))
+			}
+		}
+		// Phase assignments are keyed by phase (e.g. "sdd-apply", "jd-judge-a");
+		// the agent key is "{phase}-{profileName}".
+		for phase, assignment := range p.PhaseAssignments {
+			if assignment.ProviderID == "" || assignment.ModelID == "" {
+				continue
+			}
+			if !modelExistsInCache(providers, assignment) {
+				agentKey := phase + "-" + p.Name
+				warnings = append(warnings, fmt.Sprintf("%s references unknown model %s", agentKey, assignment.ModelID))
+			}
+		}
+	}
+	return warnings
+}
+
+// modelExistsInCache reports whether the given provider+model pair is present
+// in the loaded OpenCode model cache.
+func modelExistsInCache(providers map[string]opencode.Provider, assignment model.ModelAssignment) bool {
+	provider, ok := providers[assignment.ProviderID]
+	if !ok {
+		return false
+	}
+	_, exists := provider.Models[assignment.ModelID]
+	return exists
+}
+
 // dedupPaths removes duplicate and empty paths while preserving first-seen order.
 func dedupPaths(paths []string) []string {
 	if len(paths) == 0 {
@@ -855,6 +960,10 @@ func RunSyncWithSelection(homeDir string, selection model.Selection) (SyncResult
 	// (e.g. Engram and Context7 both merge into settings.json).
 	result.ChangedFiles = dedupPaths(rt.changedFiles)
 	result.FilesChanged = len(result.ChangedFiles)
+
+	// Surface non-fatal warnings collected during the pipeline (e.g. profile
+	// sub-agents referencing models absent from the OpenCode cache — R-PROF-31).
+	result.Warnings = rt.warnings
 
 	// True no-op: agents were discovered but all managed assets were already
 	// current — no file was written or updated. Per spec scenario:
@@ -1062,6 +1171,14 @@ func RenderSyncReport(result SyncResult) string {
 	if len(result.ChangedFiles) > 0 {
 		for _, path := range result.ChangedFiles {
 			fmt.Fprintf(&b, "  - %s\n", path)
+		}
+	}
+
+	if len(result.Warnings) > 0 {
+		fmt.Fprintln(&b, "")
+		fmt.Fprintln(&b, "Warnings:")
+		for _, w := range result.Warnings {
+			fmt.Fprintf(&b, "  - %s\n", w)
 		}
 	}
 

@@ -225,6 +225,52 @@ func DetectProfiles(settingsPath string) ([]model.Profile, error) {
 	return profiles, nil
 }
 
+// effectiveProfileDomain normalizes a profile domain so that "" and "app-dev"
+// compare equal. The app-dev default is encoded as "" in Go state; both values
+// represent the same effective domain and MUST NOT be treated as a collision.
+func effectiveProfileDomain(domain string) string {
+	if domain == "" || domain == "app-dev" {
+		return "app-dev"
+	}
+	return domain
+}
+
+// EnsureProfileDomainConsistency returns an error if any profile name appears in
+// both detected and explicit with different effective domains. "Effective
+// domain" treats "" and "app-dev" as equivalent (both are the app-dev default).
+//
+// detected holds profiles read from disk by DetectProfiles (always Domain=""
+// because opencode.json carries no domain field by design); explicit holds the
+// profiles the caller is asking to sync. The error message lists every
+// conflicting (name, detected-domain, explicit-domain) triple so the user can
+// resolve the collision by renaming the new profile.
+func EnsureProfileDomainConsistency(detected, explicit []model.Profile) error {
+	explicitByName := make(map[string]model.Profile, len(explicit))
+	for _, p := range explicit {
+		explicitByName[p.Name] = p
+	}
+
+	var conflicts []string
+	for _, d := range detected {
+		e, ok := explicitByName[d.Name]
+		if !ok {
+			continue
+		}
+		if effectiveProfileDomain(d.Domain) == effectiveProfileDomain(e.Domain) {
+			continue
+		}
+		conflicts = append(conflicts, fmt.Sprintf(
+			"profile %q domain mismatch: detected %q, explicit %q",
+			d.Name, d.Domain, e.Domain))
+	}
+
+	if len(conflicts) == 0 {
+		return nil
+	}
+	sort.Strings(conflicts)
+	return fmt.Errorf("domain collision: %s", strings.Join(conflicts, "; "))
+}
+
 // extractModelFromAgent reads the "model" and optional "variant" fields
 // from an agent definition map and parses them into a ModelAssignment.
 // Returns zero-value if missing or malformed.

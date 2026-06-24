@@ -35,6 +35,73 @@ Run when the orchestrator launches verification for an SDD change. You are the q
 
 The orchestrator should provide structured status from `skills/_shared/sdd-status-contract.md`. Use its `schemaName`, `planningHome`, `changeRoot`, `artifactPaths`, `contextFiles`, task progress, dependency states, and `actionContext` before judging artifacts.
 
+## Data-Engineering Domain Branch
+
+> **GATE**: Run `gentle-ai sdd-config --json` once at the start of the phase.
+> If `domain == "data-engineering"`, follow THIS section (Camino B) AND the
+> rest of the skill as the outer container. If `domain` is absent or anything
+> else, the instructions below are a NO-OP — execute the rest of the skill
+> exactly as before (app-dev behavior is untouched: `go test ./...` +
+> `go vet ./...`). Never infer the domain from the prompt.
+
+When the gate is active, verification follows **Camino B** (deploy + parity)
+instead of the app-dev Go test suite. The contract of a Glue job is the table
+it materializes, so Camino B proves dev-vs-prd parity and sidecar structural
+drift — not function return values. Every report, log, and PR description
+produced here MUST run through `internal/sddconfig.ScrubProfiles` so no AWS
+profile name or account ID leaks.
+
+### Camino B — deploy + dev-vs-prd parity
+
+1. **Resolve config once.**
+   ```bash
+   gentle-ai sdd-config --json
+   ```
+   Read `.domain` (MUST be `data-engineering`), `.repos.{infra,carga}`,
+   `.aws_profiles.{prd,dev,usuario}`, and `.verify.skip_deploy`. Profile names
+   are resolved by `internal/sddconfig.ResolveProfile` — never echo a raw
+   profile name or account ID into any output.
+
+2. **Deploy both repos (parallel), unless `verify.skip_deploy`.** Run
+   `sam deploy` on the `infra` and `carga` repos in parallel. If
+   `verify.skip_deploy` is `true`, short-circuit to sidecar + EXCEPT-only
+   verification (local mode) and record the skip in the report.
+
+3. **Run the Glue job.**
+   ```bash
+   aws glue start-job-run --job-name <job> --profile $(ResolveProfile dev)
+   ```
+   Wait for `JobRunState == SUCCEEDED`. Resolve the profile through
+   `ResolveProfile`; scrub the command + its captured output before logging.
+
+4. **Dev-vs-prd parity (Athena EXCEPT).** For each target table, build and run
+   the parity query via Athena:
+   ```sql
+   <internal/etl.BuildExceptSQL(target, devDB, prdDB)>
+   ```
+   The query is `SELECT * FROM <devDB>.<target> EXCEPT SELECT * FROM
+   <prdDB>.<target>`. A non-empty result is a parity CRITICAL finding (drift
+   between dev and prd). Record the row count, never the profile name.
+
+5. **Sidecar structural validation.** For each `glue-tables/{db}.{table}.yaml`
+   sidecar in the change, fetch the live table and run
+   `internal/etl.ValidateSidecar(sidecar, glueTable)`:
+   ```bash
+   aws glue get-table --database <db> --name <table> --profile $(ResolveProfile dev)
+   ```
+   Each returned `Mismatch` (`database_mismatch`, `table_mismatch`,
+   `s3_location_mismatch`, `missing_column`, `type_mismatch`,
+   `missing_partition`, `unexpected_partition`) is a CRITICAL finding.
+
+6. **Scrub all output.** Run the final report, every captured command, and any
+   PR description through `internal/sddconfig.ScrubProfiles` against the
+   resolved config. Profile names and 12-digit account IDs MUST NOT appear in
+   any persisted artifact.
+
+7. **Verdict.** Camino B yields `PASS` only when every EXCEPT result is empty
+   AND `ValidateSidecar` returns no mismatches AND the job run succeeded. Any
+   parity drift or sidecar mismatch is `FAIL`.
+
 ## Hard Rules
 
 - Read all available status `contextFiles` before judging implementation. Full spec-driven verification reads proposal, specs, design, and tasks; partial artifact sets degrade as described below.
@@ -67,6 +134,7 @@ The orchestrator should provide structured status from `skills/_shared/sdd-statu
 1. Load relevant skills via shared SDD Section A.
 2. Retrieve artifacts via shared Section B for the active persistence mode, or read the concrete `contextFiles` from structured status.
 3. Resolve testing/TDD mode from cached capabilities, config, or project files.
+   - **(data-engineering only)** Resolve domain with `gentle-ai sdd-config --json`. If `domain == "data-engineering"`, switch to Camino B (deploy + dev-vs-prd parity, see the Data-Engineering Domain Branch above) and skip the app-dev Go-suite steps below. Honor `verify.skip_deploy` for local-only mode.
 4. Count completed and incomplete tasks. Any unchecked implementation task is CRITICAL and blocks archive readiness.
 5. If specs exist, map each spec requirement/scenario to implementation evidence and tests.
 6. If design exists, check design decisions against changed code. If design is missing, skip design coherence and record why.
@@ -128,6 +196,16 @@ You are a VERIFY sub-agent. Your job: check implemented changes match spec accep
 - Do NOT run tests unless `strict_tdd` is active and test runner is explicitly provided
 - Do not fix issues; report them for the orchestrator/user
 - Return minimal report
+
+## Data-Engineering Domain Gate (small-model)
+
+Run `gentle-ai sdd-config --json` and parse `.domain`. If `domain ==
+"data-engineering"`, Camino B is required (SAM deploy both repos + Athena
+dev-vs-prd EXCEPT via `internal/etl.BuildExceptSQL` + sidecar
+`ValidateSidecar` against `aws glue get-table` + `ScrubProfiles` on output,
+honoring `verify.skip_deploy`). That loop exceeds this small-model read budget
+— STOP and return `needs-explore` so a capable model runs Camino B. App-dev
+verify (domain absent) continues with the minimal report below.
 
 ## Return Minimal Report
 

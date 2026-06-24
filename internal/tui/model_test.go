@@ -210,37 +210,23 @@ func profileModelStep(available bool) Model {
 	return m
 }
 
-func TestProfileCreateEmptyProviderEnterContinuesAndBacksOut(t *testing.T) {
-	keep := model.ModelAssignment{ProviderID: "anthropic", ModelID: "claude-sonnet-4", Effort: "high"}
-	orch := model.ModelAssignment{ProviderID: "openai", ModelID: "gpt-5"}
-
-	m := profileModelStep(false)
+func TestProfileCreateEmptyProviderEnterBacksOut(t *testing.T) {
+	// Spec (task 6.2): when the model cache is missing, the profile create
+	// model step offers ONLY "Back". Pressing enter must return to step 0
+	// (name input), NOT advance to the confirm step.
+	m := profileModelStep(false) // available=false → cache missing
 	m.ProfileDraft = model.Profile{
 		Name:              "work",
-		OrchestratorModel: orch,
-		PhaseAssignments:  map[string]model.ModelAssignment{"sdd-apply": keep},
+		OrchestratorModel: model.ModelAssignment{ProviderID: "openai", ModelID: "gpt-5"},
+		PhaseAssignments:  map[string]model.ModelAssignment{"sdd-apply": {ProviderID: "anthropic", ModelID: "claude-sonnet-4", Effort: "high"}},
 	}
 
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	state := updated.(Model)
 
-	if state.ProfileCreateStep != 2 || state.Cursor != 0 {
-		t.Fatalf("step/cursor = %d/%d, want 2/0", state.ProfileCreateStep, state.Cursor)
-	}
-	if state.ProfileDraft.OrchestratorModel != orch {
-		t.Fatalf("orchestrator = %+v, want unchanged %+v", state.ProfileDraft.OrchestratorModel, orch)
-	}
-	if got := state.ProfileDraft.PhaseAssignments["sdd-apply"]; got != keep {
-		t.Fatalf("sdd-apply assignment = %+v, want unchanged %+v", got, keep)
-	}
-
-	back := profileModelStep(false)
-	back.Cursor = 1
-	updated, _ = back.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	state = updated.(Model)
-
+	// Only "Back" is available (cursor 0) — enter returns to step 0, not step 2.
 	if state.Screen != ScreenProfileCreate || state.ProfileCreateStep != 0 || state.Cursor != 0 {
-		t.Fatalf("screen/step/cursor = %v/%d/%d, want ScreenProfileCreate/0/0", state.Screen, state.ProfileCreateStep, state.Cursor)
+		t.Fatalf("screen/step/cursor = %v/%d/%d, want ScreenProfileCreate/0/0 (Back only)", state.Screen, state.ProfileCreateStep, state.Cursor)
 	}
 }
 
@@ -314,6 +300,141 @@ func TestProfileCreateBackspaceClearsSelectedJDAssignment(t *testing.T) {
 	}
 	if got := state.ProfileDraft.PhaseAssignments["sdd-apply"]; got != keep {
 		t.Fatalf("draft sdd-apply assignment = %+v, want unchanged %+v", got, keep)
+	}
+}
+
+// ─── Domain-aware prefill at profile create step 0→1 ───────────────────────
+
+// writeDomainConfig creates <dir>/openspec/config.yaml with the given domain
+// and returns the workspace dir. An empty domain writes no file (app-dev).
+func writeDomainConfig(t *testing.T, dir, domain string) {
+	t.Helper()
+	if domain == "" {
+		return
+	}
+	configDir := filepath.Join(dir, "openspec")
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(openspec): %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte("domain: "+domain+"\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(config.yaml): %v", err)
+	}
+}
+
+func TestProfileCreatePrefillsFromDomain(t *testing.T) {
+	dir := t.TempDir()
+	writeDomainConfig(t, dir, "data-engineering")
+	defer setOSGetwdForTest(dir, nil)()
+
+	m := NewModel(system.DetectionResult{}, "dev")
+	m.Screen = ScreenProfileCreate
+	m.ProfileCreateStep = 0
+	m.ProfileNameInput = "cheap"
+	m.ProfileNamePos = len("cheap")
+	m.Selection.ModelAssignments = nil
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	state := updated.(Model)
+
+	if state.ProfileCreateStep != 1 {
+		t.Fatalf("ProfileCreateStep = %d, want 1 (advanced from name to model picker)", state.ProfileCreateStep)
+	}
+	if state.ProfileDraft.Domain != "data-engineering" {
+		t.Errorf("ProfileDraft.Domain = %q, want data-engineering (stamped on step 0→1)", state.ProfileDraft.Domain)
+	}
+	got := state.Selection.ModelAssignments["sdd-explore"].ModelID
+	if got != "claude-sonnet-4-20250514" {
+		t.Errorf("prefilled sdd-explore = %q, want claude-sonnet-4-20250514 (data-engineering default)", got)
+	}
+}
+
+func TestProfileCreatePrefillSkippedWhenAssignmentsPresent(t *testing.T) {
+	dir := t.TempDir()
+	writeDomainConfig(t, dir, "data-engineering")
+	defer setOSGetwdForTest(dir, nil)()
+
+	existing := map[string]model.ModelAssignment{
+		"sdd-apply": {ProviderID: "openai", ModelID: "gpt-5"},
+	}
+	m := NewModel(system.DetectionResult{}, "dev")
+	m.Screen = ScreenProfileCreate
+	m.ProfileCreateStep = 0
+	m.ProfileNameInput = "cheap"
+	m.ProfileNamePos = len("cheap")
+	m.Selection.ModelAssignments = existing
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	state := updated.(Model)
+
+	// Idempotency guard: existing assignments must NOT be overwritten by prefill.
+	if got := state.Selection.ModelAssignments["sdd-apply"]; got != existing["sdd-apply"] {
+		t.Errorf("sdd-apply = %+v, want unchanged %+v (idempotency guard)", got, existing["sdd-apply"])
+	}
+	if _, present := state.Selection.ModelAssignments["sdd-explore"]; present {
+		t.Errorf("prefill must not run when assignments already present; sdd-explore was added")
+	}
+	// Domain is stamped regardless of the idempotency guard.
+	if state.ProfileDraft.Domain != "data-engineering" {
+		t.Errorf("ProfileDraft.Domain = %q, want data-engineering (stamped even when prefill skipped)", state.ProfileDraft.Domain)
+	}
+}
+
+func TestProfileCreatePrefillSkippedWhenDomainEmpty(t *testing.T) {
+	// No openspec/config.yaml → domain empty (app-dev). Prefill must not run.
+	dir := t.TempDir()
+	defer setOSGetwdForTest(dir, nil)()
+
+	m := NewModel(system.DetectionResult{}, "dev")
+	m.Screen = ScreenProfileCreate
+	m.ProfileCreateStep = 0
+	m.ProfileNameInput = "cheap"
+	m.ProfileNamePos = len("cheap")
+	m.Selection.ModelAssignments = nil
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	state := updated.(Model)
+
+	if state.ProfileCreateStep != 1 {
+		t.Fatalf("ProfileCreateStep = %d, want 1", state.ProfileCreateStep)
+	}
+	if len(state.Selection.ModelAssignments) != 0 {
+		t.Errorf("ModelAssignments = %v, want empty (no domain → no prefill)", state.Selection.ModelAssignments)
+	}
+	if state.ProfileDraft.Domain != "" {
+		t.Errorf("ProfileDraft.Domain = %q, want empty (no domain detected)", state.ProfileDraft.Domain)
+	}
+}
+
+func TestProfileCreateEditModeDoesNotDetectDomain(t *testing.T) {
+	// A workspace that WOULD trigger detection if detection ran in edit mode.
+	dir := t.TempDir()
+	writeDomainConfig(t, dir, "data-engineering")
+	defer setOSGetwdForTest(dir, nil)()
+
+	existing := map[string]model.ModelAssignment{
+		"sdd-apply": {ProviderID: "openai", ModelID: "gpt-5"},
+	}
+	m := NewModel(system.DetectionResult{}, "dev")
+	m.Screen = ScreenProfileCreate
+	m.ProfileCreateStep = 0
+	m.ProfileEditMode = true
+	// Caller already populated the draft domain from the loaded profile.
+	m.ProfileDraft = model.Profile{Name: "cheap", Domain: "data-engineering"}
+	m.ProfileNameInput = "cheap"
+	m.ProfileNamePos = len("cheap")
+	m.Selection.ModelAssignments = existing
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	state := updated.(Model)
+
+	if state.ProfileCreateStep != 1 {
+		t.Fatalf("ProfileCreateStep = %d, want 1 (edit mode advances)", state.ProfileCreateStep)
+	}
+	if state.ProfileDraft.Domain != "data-engineering" {
+		t.Errorf("ProfileDraft.Domain = %q, want data-engineering (edit mode must not re-detect/overwrite)", state.ProfileDraft.Domain)
+	}
+	if got := state.Selection.ModelAssignments["sdd-apply"]; got != existing["sdd-apply"] {
+		t.Errorf("edit mode assignments changed: %+v, want unchanged %+v", got, existing["sdd-apply"])
 	}
 }
 

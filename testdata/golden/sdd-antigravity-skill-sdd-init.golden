@@ -54,16 +54,48 @@ Run this phase when the orchestrator/user asks to initialize SDD in a project. Y
 | strict TDD marker/config found | Use that value. |
 | no marker/config but test runner exists | Default `strict_tdd: true`. |
 | no test runner | Set `strict_tdd: false` and explain unavailable. |
+| `openspec/config.yaml` already sets `domain:` | Respect it; skip re-detection. |
+| no `domain:` in config | Run domain preflight (see Domain Preflight below). |
+
+## Domain Preflight
+
+SDD branches on an optional `domain` field in `openspec/config.yaml`. When
+`domain` is absent the project is app-dev and every code path stays identical to
+today. The preflight detects a data-engineering project, presents the hint for
+confirmation, and writes the confirmed value so later phases can branch on it.
+
+1. Run `gentle-ai sdd-config --detect --json` (or `--detect` for human output).
+   It scans the project root for `template.yaml` AND `glue-jobs/*.py` and returns
+   `domain`, `confidence`, and `evidence`.
+   - confidence 0.8 (both markers) → strong signal.
+   - confidence 0.5 (one marker) → weak hint.
+   - confidence 0 (no markers) → app-dev; skip the rest of this preflight.
+2. Present the hint to the user: domain, confidence, and evidence. Never apply a
+   detected domain silently.
+3. Confirm or override:
+   - User confirms `data-engineering` → proceed to write.
+   - User overrides (e.g. this is an app-dev project despite markers) → write
+     the user's choice, or leave `domain` absent for app-dev.
+   - User declines to set a domain now → leave `domain` absent (app-dev).
+4. Write the confirmed `domain` to `openspec/config.yaml` (append or update the
+   top-level `domain:` key; preserve all other keys and the `context: |` block).
+5. Optionally run `gentle-ai sdd-config --validate-repos` to warn about missing
+   `repos.infra` / `repos.carga` paths for data-engineering projects.
+
+Skill patches in later phases (sdd-spec, sdd-design, sdd-apply, sdd-verify,
+sdd-tasks) are gated on `domain: data-engineering`; when `domain` is unset they
+follow the existing app-dev path unchanged.
 
 ## Execution Steps
 
-1. Inspect project files (`package.json`, `go.mod`, `pyproject.toml`, CI, lint/test config) and summarize stack/conventions.
-2. Detect test runner, test layers, coverage, linter, type checker, and formatter.
-3. Resolve Strict TDD from agent marker, `openspec/config.yaml`, detected runner fallback, or no-runner fallback.
-4. Initialize persistence for the resolved mode.
-5. Build `.atl/skill-registry.md` using the skill-registry scan rules.
-6. Persist testing capabilities and project context.
-7. Return the structured initialization envelope.
+1. Run the Domain Preflight above (skip if `domain` is already set in config).
+2. Inspect project files (`package.json`, `go.mod`, `pyproject.toml`, CI, lint/test config) and summarize stack/conventions.
+3. Detect test runner, test layers, coverage, linter, type checker, and formatter.
+4. Resolve Strict TDD from agent marker, `openspec/config.yaml`, detected runner fallback, or no-runner fallback.
+5. Initialize persistence for the resolved mode.
+6. Build `.atl/skill-registry.md` using the skill-registry scan rules.
+7. Persist testing capabilities and project context.
+8. Return the structured initialization envelope.
 
 ## Output Contract
 

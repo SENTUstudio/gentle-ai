@@ -32,7 +32,7 @@ func RenderProfileCreate(
 	case 0:
 		return renderProfileNameStep(draft, nameInput, namePos, nameErr, editMode)
 	case 1:
-		return renderProfileModelStep(assignments, picker, cursor, editMode, draft.Name)
+		return renderProfileModelStep(assignments, picker, cursor, editMode, draft)
 	default:
 		return renderProfileConfirmStep(draft, cursor, editMode)
 	}
@@ -96,7 +96,7 @@ func renderProfileModelStep(
 	picker ModelPickerState,
 	cursor int,
 	editMode bool,
-	profileName string,
+	draft model.Profile,
 ) string {
 	var b strings.Builder
 
@@ -108,8 +108,16 @@ func renderProfileModelStep(
 	b.WriteString("\n\n")
 	b.WriteString(styles.HeadingStyle.Render("Assign Models"))
 	b.WriteString("\n")
-	b.WriteString(styles.SubtextStyle.Render("Assign models for profile: " + profileName))
+	b.WriteString(styles.SubtextStyle.Render("Assign models for profile: " + draft.Name))
 	b.WriteString("\n\n")
+
+	// Domain indicator: shown only when the draft carries a non-empty domain.
+	// app-dev is the zero-value default and is intentionally omitted so the
+	// footer stays out of the way for the common case.
+	if draft.Domain != "" {
+		b.WriteString(styles.SubtextStyle.Render("Domain: " + draft.Domain))
+		b.WriteString("\n\n")
+	}
 
 	// Reuse the full ModelPicker row contract for profile-scoped assignments.
 	b.WriteString(RenderModelPicker(assignments, picker, cursor))
@@ -174,7 +182,10 @@ func ProfileCreateOptionCount(step int, picker ModelPickerState) int {
 		return 0 // text input mode
 	case 1:
 		if len(picker.AvailableIDs) == 0 {
-			return 2 // "Continue with defaults" + "Back"
+			// Spec (task 6.2): when the model cache is missing, the profile
+			// create model step offers ONLY "Back" — the user cannot proceed
+			// without models to assign.
+			return 1 // "Back" only
 		}
 		return len(ModelPickerRowsForProfile()) + 2 // rows + Continue + Back
 	default:

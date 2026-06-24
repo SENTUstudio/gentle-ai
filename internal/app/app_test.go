@@ -288,6 +288,41 @@ func TestRunArgsSDDContinueIsDispatchedBeforePlatformValidation(t *testing.T) {
 	}
 }
 
+func TestRunArgsSDDConfigIsDispatchedBeforePlatformValidation(t *testing.T) {
+	origEnsure := ensureCurrentOSSupported
+	t.Cleanup(func() { ensureCurrentOSSupported = origEnsure })
+	ensureCurrentOSSupported = func() error {
+		return fmt.Errorf("unsupported platform")
+	}
+
+	root := t.TempDir()
+
+	var buf bytes.Buffer
+	err := RunArgs([]string{"sdd-config", "--cwd", root}, &buf)
+	if err != nil {
+		t.Fatalf("RunArgs(sdd-config) error = %v", err)
+	}
+	if !strings.Contains(buf.String(), "## SDD Config") {
+		t.Fatalf("sdd-config output missing markdown config:\n%s", buf.String())
+	}
+}
+
+func TestRunArgsSDDConfigPrintsConfiguredDomain(t *testing.T) {
+	// Triangulation: dispatch reads openspec/config.yaml and surfaces the domain.
+	root := t.TempDir()
+	writeAppSDDStatusFile(t, filepath.Join(root, "openspec", "config.yaml"),
+		"domain: data-engineering\n")
+
+	var buf bytes.Buffer
+	err := RunArgs([]string{"sdd-config", "--cwd", root}, &buf)
+	if err != nil {
+		t.Fatalf("RunArgs(sdd-config) error = %v", err)
+	}
+	if !strings.Contains(buf.String(), "data-engineering") {
+		t.Fatalf("sdd-config output missing domain:\n%s", buf.String())
+	}
+}
+
 // TestListBackupsFallsBackGracefullyForOldManifests verifies that old manifests
 // without Source/Description are still returned (not skipped) and can be displayed
 // via DisplayLabel without panicking.

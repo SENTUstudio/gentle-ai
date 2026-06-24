@@ -1,14 +1,15 @@
 # openspec/config.yaml
 schema: spec-driven
+last_init: "2026-06-21"
 
 context: |
   Tech stack: Go 1.25.10, Bubbletea TUI (charmbracelet/bubbletea v1.3.10), lipgloss v1.1.0
-  Architecture: cmd/ entrypoints, internal/ packages (agents, tui, model, pipeline, catalog, system, planner, verify, update, opencode, installcmd, cli, app, components, state, backup, assets, agentbuilder)
-  Feature branch: feat/claude-contextual-skill-loading — contextual skill loading from Claude Code
-  Agents: multi-agent support (claude, opencode, cursor, codex, gemini, vscode, windsurf, antigravity)
-  Skills catalog: internal/catalog/skills.go — known skill registry; project skills in skills/
+  Architecture: cmd/ entrypoints, internal/ packages (agents, tui, model, pipeline, catalog, system, planner, verify, update, opencode, installcmd, cli, app, components, state, backup, assets, agentbuilder, skillregistry, sddstatus, storage, versions)
+  Branch: main (mirror of upstream Gentleman-Programming/gentle-ai, SHA 510751e)
+  Agents: multi-agent support (claude, opencode, cursor, codex, gemini, vscode, windsurf, antigravity, pi, hermes, kimi, kilocode, openclaw, trae, qwen, kiro)
+  Skills catalog: internal/catalog/skills.go — known skill registry; project skills in skills/; embedded skills in internal/assets/skills/
   Build: goreleaser (.goreleaser.yaml), CI: GitHub Actions (ci.yml, pr-check.yml, release.yml)
-  Style: gofmt (standard), go vet, no golangci-lint config found
+  Style: gofmt (standard), go vet; no golangci-lint available
 
 strict_tdd: true
 
@@ -41,7 +42,7 @@ rules:
 
 testing:
   strict_tdd: true
-  detected: "2026-05-05"
+  detected: "2026-06-21"
 
   runner:
     command: "go test ./..."
@@ -51,7 +52,7 @@ testing:
     unit:
       available: true
       tool: "go test"
-      note: "132 test files across internal/ packages"
+      note: "173 test files across internal/ and e2e/ packages"
     integration:
       available: true
       tool: "net/http/httptest (built-in)"

@@ -87,6 +87,18 @@ const (
 	SkillCognitiveDoc    SkillID = "cognitive-doc-design"
 	SkillCommentWriter   SkillID = "comment-writer"
 	SkillWorkUnitCommits SkillID = "work-unit-commits"
+	// Data-engineering domain skills. Embedded under
+	// internal/assets/skills/data-engineer-*/. Registered in the catalog as
+	// category "data-engineering" at priority "p1"; install routing under a
+	// preset is controlled by internal/components/skills/presets.go.
+	SkillDataEngineerPatternDetect SkillID = "data-engineer-pattern-detect"
+	SkillDataEngineerStudyFile     SkillID = "data-engineer-study-file"
+	SkillDataEngineerETLS3         SkillID = "data-engineer-etl-s3"
+	SkillDataEngineerETLGlue       SkillID = "data-engineer-etl-glue"
+	SkillDataEngineerETLSharepoint SkillID = "data-engineer-etl-sharepoint"
+	SkillDataEngineerCreateTable   SkillID = "data-engineer-create-table"
+	SkillDataEngineerSQLFromLogic  SkillID = "data-engineer-sql-from-logic"
+	SkillDataEngineerIntegrate     SkillID = "data-engineer-integrate"
 )
 
 type PersonaID string
@@ -178,8 +190,10 @@ const (
 // Profile represents a named SDD orchestrator configuration with model assignments.
 // The default profile (Name="" or Name="default") maps to the base sdd-orchestrator.
 // Named profiles generate sdd-orchestrator-{Name} + suffixed sub-agents.
+// Domain is empty for app-dev (default) or "data-engineering" for data engineering projects.
 type Profile struct {
 	Name              string                     // e.g. "cheap", "premium"; empty = default
+	Domain            string                     // "" = app-dev (default); "data-engineering" for DE projects
 	OrchestratorModel ModelAssignment            // orchestrator model
 	PhaseAssignments  map[string]ModelAssignment // key = phase name (e.g. "sdd-apply")
 }
@@ -226,7 +240,7 @@ type TriggerWhen struct {
 type TriggerBinding struct {
 	On     TriggerEvent `json:"on"`
 	When   TriggerWhen  `json:"when"`
-	Run    []string     `json:"run"`              // agent names: review-risk, judgment-day, etc.
+	Run    []string     `json:"run"` // agent names: review-risk, judgment-day, etc.
 	Mode   TriggerMode  `json:"mode"`
 	Reason string       `json:"reason,omitempty"` // OPTIONAL — token-budget/why note; only optional binding field
 }

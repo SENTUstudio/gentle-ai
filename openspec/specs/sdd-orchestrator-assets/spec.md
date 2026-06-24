@@ -209,6 +209,21 @@ The `cursor/sdd-orchestrator.md` template MUST include a `### Chain Strategy` se
 
 ---
 
+### Requirement: Antigravity uses dynamic subagent orchestration
+
+The `antigravity` SDD orchestrator asset MUST instruct the agent to define and invoke phase subagents dynamically at runtime.
+
+#### Scenario: Antigravity orchestrator includes dynamic subagent delegation
+
+- GIVEN the Antigravity orchestrator asset is reviewed
+- WHEN the asset content is inspected
+- THEN it includes `define_subagent`
+- AND it includes `invoke_subagent`
+- AND it directs Antigravity to read phase skills from `~/.gemini/antigravity-cli/skills/{phase}/SKILL.md` or workspace `.agents/skills/{phase}/SKILL.md`
+- AND it avoids inline phase execution as the primary execution strategy
+
+---
+
 ### Requirement: Platform-Accurate Binding Wording for Solo-Inline and Platform-Native Hosts
 
 For solo-inline and platform-native orchestrator hosts (windsurf, antigravity, kimi, kiro), the skill-binding instruction MUST phrase "inject under `## Skills to load before work`" in a way that maps to each host's actual phase-context mechanism. The binding MUST NOT reintroduce OpenCode-style persisted-delegation claims that the existing spec forbids for these hosts.

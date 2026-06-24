@@ -48,10 +48,136 @@ From the orchestrator:
 - **hybrid**: Follow BOTH conventions — persist to Engram AND write `design.md` to filesystem. Retrieve dependencies from Engram (primary) with filesystem fallback.
 - **none**: Return result only. Never create or modify project files.
 
+## Data-Engineering Domain Branch
+
+> **GATE**: Run `gentle-ai sdd-config --json` once at the start of this phase.
+> If `domain == "data-engineering"`, the design document you write MUST follow
+> the templates in this section (in addition to the standard design format
+> below). If `domain` is absent or anything else, this section is a NO-OP —
+> produce the standard design.md exactly as before. Never infer the domain.
+
+When the gate is active, the design must internalize ETL-specific artifacts:
+
+- A **DAG-of-transformations**: nodes = source tables + intermediate temp
+  views + target table; edges = data dependencies. This is the single most
+  load-bearing diagram for a Glue job — reviewers reason about correctness
+  from it, not from prose.
+- A **pattern-aware** design choice: the design declares which of the four
+  patterns (`incremental`, `multi-step`, `legacy-wrangler`, `glue-studio`)
+  detected by `internal/etl.DetectPattern` this change follows, and uses the
+  matching scaffold. Mixed patterns MUST be called out explicitly.
+- For MODIFICATIONS, an **insertion-point analysis**: WHERE the new logic
+  inserts into the existing DAG, and the cascade impact (which downstream
+  stages change shape, which remain byte-identical).
+
+### DAG-of-transformations template (data-engineering)
+
+Include this section under "Technical Approach" (replacing or augmenting the
+generic data-flow ASCII diagram):
+
+```markdown
+### DAG (transformations)
+
+Nodes:
+- [S1] source db_dl_dev_stg_encuestas.encuestas_csi  (sidecar: glue-tables/...)
+- [V1] tmp_survey_clean
+- [V2] tmp_survey_scores
+- [V3] tmp_rollup_month
+- [T1] target db_dl_dev_ref.encuestas_csi_ref         (sidecar: glue-tables/...)
+
+Edges (data dependencies):
+- S1 -> V1
+- S1 -> V2
+- V1, V2 -> V3
+- V3 -> T1
+
+Idempotency window: watermark column `<col>`; re-running over the same window
+produces zero new target rows.
+```
+
+If the change is a modification rather than a full rebuild, append a
+"## Modification Insertion Point" section (template below) and mark the DAG
+with `[+] new` / `[~] extended shape` / `[=] byte-identical regression baseline`
+on the affected nodes.
+
+### Pattern-aware design choice (data-engineering)
+
+Determine the pattern by inspecting the existing Glue job source (the markers
+`internal/etl.DetectPattern` consumes); declare it explicitly:
+
+```markdown
+### Pattern
+
+- Classification: `incremental` (or `multi-step` | `legacy-wrangler` | `glue-studio`)
+- Confidence: <from DetectPattern, e.g. 0.85>
+- Override: none | user-confirmed <pattern> (overrides the heuristic)
+- Chosen scaffold (Camino A): <watermark-test / multi-step-DAG-test / Athena-Spark parity / legacy wrangler smoke>
+```
+
+For mixed or ambiguous patterns (confidence < 0.85 OR two matched patterns),
+the design MUST list the secondary indication and the override choice — never
+silently pick one. See `internal/etl.DetectPattern`.
+
+### Modification insertion-point template (data-engineering — MODIFIED only)
+
+```markdown
+### Insertion Point
+
+- Insert AFTER node `<V?>` (the last stage whose output remains byte-identical)
+- Insert BEFORE node `<V?>` (the first stage whose output shape changes)
+- New nodes to add: `[<V?>] <name>` carrying the new logic, declared in the DAG above
+
+### Cascade Impact
+
+| Stage | Pre-change rows | Post-change rows | Reason |
+|-------|------------------|------------------|--------|
+| <upstream unchanged>   | R | R | byte-identical regression baseline |
+| <new stage>             | — | R' | new column(s) / window |
+| <downstream extended>   | R | R'' | depends on new stage |
+| <target>                | R | R'' | final materialized impact |
+
+### Regression Strategy
+
+- Byte-identical stages: asserted by **Camino A** EXCEPT against a frozen
+  pre-change dev run on the same source window.
+- Extended stages & target: asserted by the new scenarios in the spec, and by
+  **Camino B** dev-vs-prd EXCEPT (`internal/etl.BuildExceptSQL`).
+- Sidecar drift detection: `internal/etl.ValidateSidecar` against
+  `aws glue get-table` covers schema; row-level drift covered by EXCEPT.
+```
+
+### Scenario coverage for ETL
+
+Design-level technical questions to answer (in addition to the standard
+design.md sections) when `domain == data-engineering`:
+
+- Is the watermark source reliable (state store vs derived)? What is the
+  recovery procedure if the watermark is lost?
+- Are the temp views re-usable across jobs (`HasTempViews`-style), or are
+  they private to this job? (Affects isolation design.)
+- What is the EXCEPT scope for Camino B parity (full table, partition slice,
+  watermark window)?
+- Which `aws_profiles` logical profile (`prd`/`dev`/`usuario`) is consumed at
+  each pipeline stage? (Leaks here are catched by `internal/sddconfig.ScrubProfiles`.)
+
 ## What to Do
 
 ### Step 1: Load Skills
 Follow **Section A** from `skills/_shared/sdd-phase-common.md`.
+
+### Step 1a (data-engineering only): Resolve Domain
+
+If you entered the **Data-Engineering Domain Branch** above (the gate passed),
+resolve the domain ONCE here and cache it for the rest of the phase:
+
+```bash
+gentle-ai sdd-config --json
+```
+
+Parse `.domain`. If `data-engineering`, the DAG + pattern + insertion-point
+templates above are MANDATORY. If absent, skip them and proceed with the
+app-dev design flow below — the rest of this skill is identical to its prior
+behavior.
 
 ### Step 2: Read the Codebase
 
