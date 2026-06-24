@@ -10,6 +10,7 @@ import (
 
 	"github.com/gentleman-programming/gentle-ai/internal/model"
 	"github.com/gentleman-programming/gentle-ai/internal/opencode"
+	"github.com/gentleman-programming/gentle-ai/internal/sddconfig"
 	"github.com/gentleman-programming/gentle-ai/internal/tui/styles"
 )
 
@@ -75,10 +76,17 @@ type ModelPickerState struct {
 	// When true, the row list still includes optional profile-scoped Judgment Day
 	// agents alongside SDD rows.
 	ForProfile bool
+
+	// Domain is the detected SDD domain ("" = app-dev, "data-engineering" = DE).
+	// When set, unassigned phases show domain-appropriate recommended models
+	// instead of a generic "(default)" label.
+	Domain string
 }
 
 // NewModelPickerState initializes the picker state from the models cache,
 // merging any custom providers defined in the OpenCode settings file.
+// It also detects the SDD domain so unassigned phases show domain-aware
+// recommended models instead of a generic "(default)" label.
 func NewModelPickerState(cachePath string, settingsPath string) ModelPickerState {
 	providers, err := opencode.LoadModelsOrEmpty(cachePath)
 	if err != nil {
@@ -109,12 +117,19 @@ func NewModelPickerState(cachePath string, settingsPath string) ModelPickerState
 		configWarning = fmt.Sprintf("Could not load custom providers from opencode.json: %v", configErr)
 	}
 
+	// Detect domain from sdd-config so the picker can show domain-aware defaults.
+	domain := ""
+	if cfg, err := sddconfig.LoadConfig(""); err == nil {
+		domain = cfg.Domain
+	}
+
 	return ModelPickerState{
 		Providers:     providers,
 		AvailableIDs:  available,
 		SDDModels:     sddModels,
 		ConfigWarning: configWarning,
 		Mode:          ModePhaseList,
+		Domain:        domain,
 	}
 }
 
@@ -677,6 +692,14 @@ func renderPhaseList(
 		b.WriteString("\n\n")
 	}
 
+	// Detect domain from sdd-config to show domain-aware recommendations.
+	domainDefaults := model.DefaultModelsForDomain(state.Domain)
+
+	if state.Domain != "" {
+		b.WriteString(styles.SubtextStyle.Render(fmt.Sprintf("Domain: %s — showing recommended models", state.Domain)))
+		b.WriteString("\n\n")
+	}
+
 	if len(state.AvailableIDs) == 0 {
 		// Profile create flow (task 6.2): when the model cache is missing, the
 		// spec requires the cache-missing message AND only a "Back" option —
@@ -767,6 +790,10 @@ func renderPhaseList(
 			if ok && assignment.ProviderID != "" {
 				provName, modelName := resolveNames(assignment, state)
 				label = formatAssignmentLabel(row, provName, modelName, assignment.Effort)
+			} else if domainDefault, hasDD := domainDefaults[phase]; hasDD && domainDefault.ProviderID != "" {
+				// Show domain-aware recommended model for unassigned phases.
+				_, modelName := resolveNames(domainDefault, state)
+				label = fmt.Sprintf("%-20s (%s)", row, modelName)
 			} else {
 				label = fmt.Sprintf("%-20s (default)", row)
 			}
