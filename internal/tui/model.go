@@ -24,6 +24,7 @@ import (
 	"github.com/gentleman-programming/gentle-ai/internal/opencode"
 	"github.com/gentleman-programming/gentle-ai/internal/pipeline"
 	"github.com/gentleman-programming/gentle-ai/internal/planner"
+	"github.com/gentleman-programming/gentle-ai/internal/sddconfig"
 	"github.com/gentleman-programming/gentle-ai/internal/state"
 	"github.com/gentleman-programming/gentle-ai/internal/system"
 	"github.com/gentleman-programming/gentle-ai/internal/tui/screens"
@@ -3859,6 +3860,24 @@ func (m Model) handleProfileNameInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.ProfileNameCollision = false
 		m.ProfileDraft.Name = name
 		m.ProfileCreateStep = 1
+
+		// Domain-aware prefill (create flow only): detect the project domain from
+		// openspec/config.yaml and, when the user has not yet assigned any models,
+		// seed the picker with that domain's recommended models. The domain is
+		// always stamped onto the draft so the generated profile carries it.
+		// Idempotent: re-entry (Back then Enter) leaves a non-empty
+		// ModelAssignments untouched — only the Domain stamp is refreshed. Edit
+		// mode never reaches this branch (it advances via confirmProfileCreate),
+		// so a loaded profile's domain is preserved.
+		if cwd, err := osGetwdFn(); err == nil {
+			if cfg, cfgErr := sddconfig.LoadConfig(cwd); cfgErr == nil {
+				m.ProfileDraft.Domain = cfg.Domain
+				if cfg.Domain != "" && len(m.Selection.ModelAssignments) == 0 {
+					m.Selection.ModelAssignments = model.DefaultModelsForDomain(cfg.Domain)
+				}
+			}
+		}
+
 		// Initialize model picker for orchestrator step.
 		cachePath := opencode.DefaultCachePath()
 		if _, err := osStatModelCache(cachePath); err == nil {

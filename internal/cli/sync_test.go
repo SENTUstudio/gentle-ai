@@ -10,6 +10,7 @@ import (
 
 	"github.com/gentleman-programming/gentle-ai/internal/agents"
 	"github.com/gentleman-programming/gentle-ai/internal/backup"
+	"github.com/gentleman-programming/gentle-ai/internal/components/sdd"
 	"github.com/gentleman-programming/gentle-ai/internal/model"
 	"github.com/gentleman-programming/gentle-ai/internal/state"
 	"github.com/gentleman-programming/gentle-ai/internal/verify"
@@ -1357,6 +1358,154 @@ func TestRunSyncDetectsExistingProfilesOnRegularSync(t *testing.T) {
 		t.Errorf("run2 (regular sync): profile orchestrator prompt should preserve JD delegation mapping after DetectProfiles re-sync")
 	}
 	_ = result2 // result2 may or may not be no-op depending on whether profile overlay is idempotent
+}
+
+// TestRunSyncDomainCollisionError verifies the sync collision guard: when an
+// explicit profile reuses the name of an existing on-disk profile that was
+// created for a different effective domain, sync returns a wrapped error from
+// EnsureProfileDomainConsistency naming the colliding profile and domain.
+//
+// opencode.json carries no domain field by design (Q3=A), so a profile created
+// for app-dev is always detected with Domain="". Syncing an explicit profile
+// stamped for data-engineering under the same name is therefore a collision.
+func TestRunSyncDomainCollisionError(t *testing.T) {
+	home := t.TempDir()
+	restoreHome := osUserHomeDir
+	restoreBackupHome := backup.UserHomeDirFn
+	restoreCommand := runCommand
+	restoreLookPath := cmdLookPath
+	t.Cleanup(func() {
+		osUserHomeDir = restoreHome
+		backup.UserHomeDirFn = restoreBackupHome
+		runCommand = restoreCommand
+		cmdLookPath = restoreLookPath
+	})
+	osUserHomeDir = func() (string, error) { return home, nil }
+	backup.UserHomeDirFn = func() (string, error) { return home, nil }
+	runCommand = func(string, ...string) error { return nil }
+	cmdLookPath = func(name string) (string, error) { return "/usr/local/bin/" + name, nil }
+
+	components := []model.ComponentID{
+		model.ComponentSDD,
+		model.ComponentEngram,
+		model.ComponentContext7,
+		model.ComponentGGA,
+		model.ComponentSkills,
+	}
+
+	// Run 1: create profile "cheap" with Domain="" (app-dev default). The
+	// generated opencode.json has no domain field, so DetectProfiles later
+	// returns Domain="" for it.
+	selCreate := model.Selection{
+		Agents:     []model.AgentID{model.AgentOpenCode},
+		Components: components,
+		SDDMode:    model.SDDModeSingle,
+		Profiles: []model.Profile{{
+			Name: "cheap",
+			OrchestratorModel: model.ModelAssignment{
+				ProviderID: "anthropic",
+				ModelID:    "claude-haiku-3-5-20241022",
+			},
+		}},
+	}
+	if _, err := RunSyncWithSelection(home, selCreate); err != nil {
+		t.Fatalf("RunSyncWithSelection() run1 (create cheap app-dev) error = %v", err)
+	}
+
+	// Precondition: the on-disk profile is detected with an empty domain.
+	settingsPath := filepath.Join(home, ".config", "opencode", "opencode.json")
+	detected, derr := sdd.DetectProfiles(settingsPath)
+	if derr != nil {
+		t.Fatalf("DetectProfiles() error = %v", derr)
+	}
+	if len(detected) != 1 || detected[0].Name != "cheap" || detected[0].Domain != "" {
+		t.Fatalf("detected = %+v, want exactly one profile 'cheap' with empty domain", detected)
+	}
+
+	// Run 2: sync explicit cheap stamped for data-engineering. Same name, but
+	// effective domain differs from the on-disk app-dev profile → the collision
+	// guard must reject the sync with a wrapped error.
+	selCollide := model.Selection{
+		Agents:     []model.AgentID{model.AgentOpenCode},
+		Components: components,
+		SDDMode:    model.SDDModeSingle,
+		Profiles: []model.Profile{{
+			Name:   "cheap",
+			Domain: "data-engineering",
+			OrchestratorModel: model.ModelAssignment{
+				ProviderID: "anthropic",
+				ModelID:    "claude-haiku-3-5-20241022",
+			},
+		}},
+	}
+	_, err := RunSyncWithSelection(home, selCollide)
+	if err == nil {
+		t.Fatal("RunSyncWithSelection() run2 expected domain collision error, got nil")
+	}
+	msg := err.Error()
+	for _, want := range []string{"sync sdd profile domain collision", "cheap", "domain", "data-engineering"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("collision error %q missing substring %q", msg, want)
+		}
+	}
+}
+
+// TestRunSyncDomainConsistency_AllowsSameEffectiveDomain is the triangulation
+// companion to TestRunSyncDomainCollisionError: re-syncing an explicit profile
+// whose effective domain matches the on-disk profile MUST succeed. This proves
+// the guard distinguishes a real collision from a benign re-sync — an
+// always-error guard would pass the collision test but fail this one. It also
+// pins the "" == "app-dev" equivalence at the sync wiring layer.
+func TestRunSyncDomainConsistency_AllowsSameEffectiveDomain(t *testing.T) {
+	home := t.TempDir()
+	restoreHome := osUserHomeDir
+	restoreBackupHome := backup.UserHomeDirFn
+	restoreCommand := runCommand
+	restoreLookPath := cmdLookPath
+	t.Cleanup(func() {
+		osUserHomeDir = restoreHome
+		backup.UserHomeDirFn = restoreBackupHome
+		runCommand = restoreCommand
+		cmdLookPath = restoreLookPath
+	})
+	osUserHomeDir = func() (string, error) { return home, nil }
+	backup.UserHomeDirFn = func() (string, error) { return home, nil }
+	runCommand = func(string, ...string) error { return nil }
+	cmdLookPath = func(name string) (string, error) { return "/usr/local/bin/" + name, nil }
+
+	components := []model.ComponentID{
+		model.ComponentSDD,
+		model.ComponentEngram,
+		model.ComponentContext7,
+		model.ComponentGGA,
+		model.ComponentSkills,
+	}
+	base := model.Profile{
+		Name: "cheap",
+		OrchestratorModel: model.ModelAssignment{
+			ProviderID: "anthropic",
+			ModelID:    "claude-haiku-3-5-20241022",
+		},
+	}
+	sel := model.Selection{
+		Agents:     []model.AgentID{model.AgentOpenCode},
+		Components: components,
+		SDDMode:    model.SDDModeSingle,
+		Profiles:   []model.Profile{base},
+	}
+
+	// Run 1: create cheap with Domain="" (app-dev default).
+	if _, err := RunSyncWithSelection(home, sel); err != nil {
+		t.Fatalf("RunSyncWithSelection() run1 error = %v", err)
+	}
+
+	// Run 2: re-sync cheap stamped Domain="app-dev" — same effective domain as
+	// the on-disk "" profile. The guard MUST NOT treat this as a collision.
+	base.Domain = "app-dev"
+	sel.Profiles = []model.Profile{base}
+	if _, err := RunSyncWithSelection(home, sel); err != nil {
+		t.Fatalf("RunSyncWithSelection() run2 (same effective domain) expected success, got: %v", err)
+	}
 }
 
 func TestRunSyncExternalSingleActiveSkipsDetectAndPreservesOrchestratorPrompt(t *testing.T) {

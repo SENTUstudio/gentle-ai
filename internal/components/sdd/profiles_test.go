@@ -1126,3 +1126,87 @@ func assertExactTaskPermissions(t *testing.T, got, want map[string]any) {
 		}
 	}
 }
+
+// ─── EnsureProfileDomainConsistency ────────────────────────────────────────
+
+func TestEnsureProfileDomainConsistency(t *testing.T) {
+	tests := []struct {
+		name     string
+		detected []model.Profile
+		explicit []model.Profile
+		wantErr  bool
+		// contains are substrings the error message MUST contain when wantErr.
+		contains []string
+	}{
+		{
+			name:     "empty detected is never a conflict",
+			detected: nil,
+			explicit: []model.Profile{{Name: "cheap", Domain: "data-engineering"}},
+			wantErr:  false,
+		},
+		{
+			name:     "empty explicit is never a conflict",
+			detected: []model.Profile{{Name: "cheap", Domain: ""}},
+			explicit: nil,
+			wantErr:  false,
+		},
+		{
+			name:     "same name same domain empty/empty is not a conflict",
+			detected: []model.Profile{{Name: "cheap", Domain: ""}},
+			explicit: []model.Profile{{Name: "cheap", Domain: ""}},
+			wantErr:  false,
+		},
+		{
+			name:     "empty and app-dev are equivalent (not a conflict)",
+			detected: []model.Profile{{Name: "cheap", Domain: ""}},
+			explicit: []model.Profile{{Name: "cheap", Domain: "app-dev"}},
+			wantErr:  false,
+		},
+		{
+			name:     "same name different domain is a conflict",
+			detected: []model.Profile{{Name: "cheap", Domain: ""}},
+			explicit: []model.Profile{{Name: "cheap", Domain: "data-engineering"}},
+			wantErr:  true,
+			contains: []string{"cheap", "data-engineering", "domain"},
+		},
+		{
+			name: "multiple conflicts are all listed",
+			detected: []model.Profile{
+				{Name: "cheap", Domain: ""},
+				{Name: "premium", Domain: "app-dev"},
+			},
+			explicit: []model.Profile{
+				{Name: "cheap", Domain: "data-engineering"},
+				{Name: "premium", Domain: "ml-ops"},
+			},
+			wantErr:  true,
+			contains: []string{"cheap", "premium", "data-engineering", "ml-ops"},
+		},
+		{
+			name:     "non-overlapping names are not a conflict",
+			detected: []model.Profile{{Name: "cheap", Domain: ""}},
+			explicit: []model.Profile{{Name: "premium", Domain: "data-engineering"}},
+			wantErr:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := EnsureProfileDomainConsistency(tt.detected, tt.explicit)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("EnsureProfileDomainConsistency() error = nil, want error")
+				}
+				for _, want := range tt.contains {
+					if !strings.Contains(err.Error(), want) {
+						t.Errorf("error %q missing substring %q", err.Error(), want)
+					}
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("EnsureProfileDomainConsistency() error = %v, want nil", err)
+			}
+		})
+	}
+}

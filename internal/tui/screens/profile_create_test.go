@@ -115,6 +115,33 @@ func TestRenderProfileCreate_Step1_ShowsJDRowsAssignmentAndClearHelp(t *testing.
 	}
 }
 
+// ─── RenderProfileCreate step 1 domain footer ────────────────────────────────
+
+func TestRenderProfileCreate_Step1_ShowsDomainFooter(t *testing.T) {
+	draft := model.Profile{Name: "cheap", Domain: "data-engineering"}
+	picker := screens.ModelPickerState{}
+
+	output := screens.RenderProfileCreate(1, draft, "", 0, "", false, nil, picker, 0)
+
+	if !strings.Contains(output, "data-engineering") {
+		t.Errorf("expected domain footer to show %q, got:\n%s", "data-engineering", output)
+	}
+	if !strings.Contains(output, "Domain:") {
+		t.Errorf("expected 'Domain:' label in step 1 footer, got:\n%s", output)
+	}
+}
+
+func TestRenderProfileCreate_Step1_OmitsDomainFooterWhenEmpty(t *testing.T) {
+	draft := model.Profile{Name: "cheap", Domain: ""}
+	picker := screens.ModelPickerState{}
+
+	output := screens.RenderProfileCreate(1, draft, "", 0, "", false, nil, picker, 0)
+
+	if strings.Contains(output, "Domain:") {
+		t.Errorf("domain footer must be omitted when Domain is empty, got:\n%s", output)
+	}
+}
+
 // ─── Edit mode ────────────────────────────────────────────────────────────────
 
 func TestRenderProfileCreate_EditMode_ShowsEditHeader(t *testing.T) {

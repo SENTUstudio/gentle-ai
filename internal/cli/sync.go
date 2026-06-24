@@ -616,7 +616,14 @@ func (s componentSyncStep) Run() error {
 		//   from disk so their orchestrator prompts are refreshed from updated embedded
 		//   assets while model assignments are preserved.
 		profiles := s.selection.Profiles
-		if len(profiles) == 0 && profileStrategy != model.SDDProfileStrategyExternalSingleActive {
+
+		// Detect existing named profiles on disk. The detected set is used both
+		// to refresh prompts on a regular re-sync (no explicit profiles) AND to
+		// guard against domain collisions when explicit profiles are synced.
+		// opencode.json carries no domain field by design (Q3=A), so detected
+		// profiles always have Domain="" (app-dev).
+		var detected []model.Profile
+		if profileStrategy != model.SDDProfileStrategyExternalSingleActive {
 			settingsPath := ""
 			for _, adapter := range adapters {
 				if adapter.Agent() == model.AgentOpenCode {
@@ -625,12 +632,27 @@ func (s componentSyncStep) Run() error {
 				}
 			}
 			if settingsPath != "" {
-				detected, detectErr := sdd.DetectProfiles(settingsPath)
-				if detectErr == nil {
-					profiles = detected
+				if d, detectErr := sdd.DetectProfiles(settingsPath); detectErr == nil {
+					detected = d
 				}
 				// If detect fails (e.g. file missing), silently skip — no profiles to refresh.
 			}
+		}
+
+		// Collision guard: an explicit profile must not reuse the name of an
+		// existing on-disk profile that was created for a different effective
+		// domain ("" and "app-dev" are treated as equivalent). Detected-vs-
+		// explicit is the only pairing that can collide; a profile can never
+		// collide with itself, so the guard is skipped when no explicit profiles
+		// are provided.
+		if len(s.selection.Profiles) > 0 {
+			if err := sdd.EnsureProfileDomainConsistency(detected, s.selection.Profiles); err != nil {
+				return fmt.Errorf("sync sdd profile domain collision: %w", err)
+			}
+		}
+
+		if len(profiles) == 0 && profileStrategy != model.SDDProfileStrategyExternalSingleActive {
+			profiles = detected
 		}
 
 		// If profiles exist (explicit or detected), SDDModeMulti is required:

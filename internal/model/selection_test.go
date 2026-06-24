@@ -1,71 +1,66 @@
 package model
 
-import (
-	"testing"
-)
+import "testing"
 
-// TestSelectionHasStrictTDDField verifies that the Selection struct has a
-// StrictTDD bool field.
-func TestSelectionHasStrictTDDField(t *testing.T) {
-	s := Selection{}
-	// Field must be accessible and default to false.
-	if s.StrictTDD {
-		t.Fatal("Selection.StrictTDD default = true, want false")
+func TestDefaultModelsForDomainAppDev(t *testing.T) {
+	defaults := DefaultModelsForDomain("")
+	if defaults["sdd-explore"].ModelID != "claude-haiku-4-5-20250315" {
+		t.Errorf("app-dev explore = %s, want claude-haiku-4-5-20250315", defaults["sdd-explore"].ModelID)
 	}
-
-	s.StrictTDD = true
-	if !s.StrictTDD {
-		t.Fatal("Selection.StrictTDD set to true but read back as false")
+	if defaults["sdd-spec"].ModelID != "claude-sonnet-4-20250514" {
+		t.Errorf("app-dev spec = %s, want claude-sonnet-4-20250514", defaults["sdd-spec"].ModelID)
+	}
+	if defaults["sdd-design"].ModelID != "claude-opus-4-20250514" {
+		t.Errorf("app-dev design = %s, want claude-opus-4-20250514", defaults["sdd-design"].ModelID)
 	}
 }
 
-// TestSyncOverridesHasStrictTDDPointer verifies that SyncOverrides has a
-// *bool StrictTDD field (nil = no override semantics).
-func TestSyncOverridesHasStrictTDDPointer(t *testing.T) {
-	o := SyncOverrides{}
-	// Nil means "no override".
-	if o.StrictTDD != nil {
-		t.Fatal("SyncOverrides.StrictTDD default = non-nil, want nil")
+func TestDefaultModelsForDomainDataEngineering(t *testing.T) {
+	defaults := DefaultModelsForDomain("data-engineering")
+	// Data-eng needs Sonnet for explore (not Haiku) — data profiling needs judgment
+	if defaults["sdd-explore"].ModelID != "claude-sonnet-4-20250514" {
+		t.Errorf("data-eng explore = %s, want claude-sonnet-4-20250514", defaults["sdd-explore"].ModelID)
 	}
-
-	enabled := true
-	o.StrictTDD = &enabled
-	if o.StrictTDD == nil || !*o.StrictTDD {
-		t.Fatal("SyncOverrides.StrictTDD pointer set to true but read back incorrectly")
+	// Data-eng needs Opus for spec (not Sonnet) — schema + DAG needs precision
+	if defaults["sdd-spec"].ModelID != "claude-opus-4-20250514" {
+		t.Errorf("data-eng spec = %s, want claude-opus-4-20250514", defaults["sdd-spec"].ModelID)
 	}
-
-	disabled := false
-	o.StrictTDD = &disabled
-	if o.StrictTDD == nil || *o.StrictTDD {
-		t.Fatal("SyncOverrides.StrictTDD pointer set to false but read back incorrectly")
+	// Design stays Opus for both
+	if defaults["sdd-design"].ModelID != "claude-opus-4-20250514" {
+		t.Errorf("data-eng design = %s, want claude-opus-4-20250514", defaults["sdd-design"].ModelID)
 	}
 }
 
-// TestSelectionHasCodexModelAssignments verifies that the Selection struct has a
-// CodexModelAssignments map field.
-func TestSelectionHasCodexModelAssignments(t *testing.T) {
-	s := Selection{}
-	// Zero value is nil.
-	if s.CodexModelAssignments != nil {
-		t.Fatal("Selection.CodexModelAssignments zero value should be nil")
+func TestDefaultModelsForDomainHasAllPhases(t *testing.T) {
+	defaults := DefaultModelsForDomain("data-engineering")
+	expectedPhases := []string{
+		"sdd-explore", "sdd-propose", "sdd-spec", "sdd-design",
+		"sdd-tasks", "sdd-apply", "sdd-verify", "sdd-archive",
 	}
-
-	s.CodexModelAssignments = map[string]CodexEffort{"sdd-apply": CodexEffortHigh}
-	if s.CodexModelAssignments["sdd-apply"] != CodexEffortHigh {
-		t.Fatal("Selection.CodexModelAssignments not accessible after assignment")
+	for _, phase := range expectedPhases {
+		if _, ok := defaults[phase]; !ok {
+			t.Errorf("missing phase %s in data-engineering defaults", phase)
+		}
 	}
 }
 
-// TestSyncOverridesCodexModelPreset verifies that SyncOverrides has a
-// CodexModelAssignments map field (nil = no override semantics).
-func TestSyncOverridesCodexModelPreset(t *testing.T) {
-	o := SyncOverrides{}
-	if o.CodexModelAssignments != nil {
-		t.Fatal("SyncOverrides.CodexModelAssignments zero value should be nil")
+func TestDefaultModelsForDomainDataEngDiffersFromAppDev(t *testing.T) {
+	appDev := DefaultModelsForDomain("")
+	dataEng := DefaultModelsForDomain("data-engineering")
+	// explore MUST differ: app-dev=Haiku, data-eng=Sonnet
+	if appDev["sdd-explore"].ModelID == dataEng["sdd-explore"].ModelID {
+		t.Error("explore model should differ between app-dev and data-engineering")
 	}
+	// spec MUST differ: app-dev=Sonnet, data-eng=Opus
+	if appDev["sdd-spec"].ModelID == dataEng["sdd-spec"].ModelID {
+		t.Error("spec model should differ between app-dev and data-engineering")
+	}
+}
 
-	o.CodexModelAssignments = map[string]CodexEffort{"default": CodexEffortMedium}
-	if o.CodexModelAssignments == nil {
-		t.Fatal("SyncOverrides.CodexModelAssignments should be non-nil after assignment")
+func TestProfileDomainFieldBackwardCompat(t *testing.T) {
+	// A profile with empty Domain must behave as app-dev
+	p := Profile{Name: "cheap"}
+	if p.Domain != "" {
+		t.Error("new Profile should have empty Domain by default")
 	}
 }

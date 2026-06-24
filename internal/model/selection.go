@@ -31,6 +31,36 @@ func (s Selection) HasAgent(agent AgentID) bool {
 	return false
 }
 
+// DefaultModelsForDomain returns recommended model assignments per SDD phase for a given domain.
+// Empty domain or "app-dev" returns app-dev defaults. "data-engineering" returns DE defaults.
+// Data-engineering needs higher tiers because data profiling and schema design require more judgment.
+func DefaultModelsForDomain(domain string) map[string]ModelAssignment {
+	switch domain {
+	case "data-engineering":
+		return map[string]ModelAssignment{
+			"sdd-explore":  {ProviderID: "anthropic", ModelID: "claude-sonnet-4-20250514"},
+			"sdd-propose":  {ProviderID: "anthropic", ModelID: "claude-sonnet-4-20250514"},
+			"sdd-spec":     {ProviderID: "anthropic", ModelID: "claude-opus-4-20250514"},
+			"sdd-design":   {ProviderID: "anthropic", ModelID: "claude-opus-4-20250514"},
+			"sdd-tasks":    {ProviderID: "anthropic", ModelID: "claude-sonnet-4-20250514"},
+			"sdd-apply":    {ProviderID: "anthropic", ModelID: "claude-sonnet-4-20250514"},
+			"sdd-verify":   {ProviderID: "anthropic", ModelID: "claude-sonnet-4-20250514"},
+			"sdd-archive":  {ProviderID: "anthropic", ModelID: "claude-haiku-4-5-20250315"},
+		}
+	default: // app-dev or empty
+		return map[string]ModelAssignment{
+			"sdd-explore":  {ProviderID: "anthropic", ModelID: "claude-haiku-4-5-20250315"},
+			"sdd-propose":  {ProviderID: "anthropic", ModelID: "claude-sonnet-4-20250514"},
+			"sdd-spec":     {ProviderID: "anthropic", ModelID: "claude-sonnet-4-20250514"},
+			"sdd-design":   {ProviderID: "anthropic", ModelID: "claude-opus-4-20250514"},
+			"sdd-tasks":    {ProviderID: "anthropic", ModelID: "claude-sonnet-4-20250514"},
+			"sdd-apply":    {ProviderID: "anthropic", ModelID: "claude-sonnet-4-20250514"},
+			"sdd-verify":   {ProviderID: "anthropic", ModelID: "claude-sonnet-4-20250514"},
+			"sdd-archive":  {ProviderID: "anthropic", ModelID: "claude-haiku-4-5-20250315"},
+		}
+	}
+}
+
 func (s Selection) HasComponent(component ComponentID) bool {
 	for _, current := range s.Components {
 		if current == component {
