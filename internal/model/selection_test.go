@@ -4,30 +4,30 @@ import "testing"
 
 func TestDefaultModelsForDomainAppDev(t *testing.T) {
 	defaults := DefaultModelsForDomain("")
-	if defaults["sdd-explore"].ModelID != "claude-haiku-4-5-20250315" {
-		t.Errorf("app-dev explore = %s, want claude-haiku-4-5-20250315", defaults["sdd-explore"].ModelID)
+	if defaults["sdd-explore"].ModelID != "minimax-m3" {
+		t.Errorf("app-dev explore = %s, want minimax-m3", defaults["sdd-explore"].ModelID)
 	}
-	if defaults["sdd-spec"].ModelID != "claude-sonnet-4-20250514" {
-		t.Errorf("app-dev spec = %s, want claude-sonnet-4-20250514", defaults["sdd-spec"].ModelID)
+	if defaults["sdd-spec"].ModelID != "kimi-k2.7-code" {
+		t.Errorf("app-dev spec = %s, want kimi-k2.7-code", defaults["sdd-spec"].ModelID)
 	}
-	if defaults["sdd-design"].ModelID != "claude-opus-4-20250514" {
-		t.Errorf("app-dev design = %s, want claude-opus-4-20250514", defaults["sdd-design"].ModelID)
+	if defaults["sdd-design"].ModelID != "minimax-m3" {
+		t.Errorf("app-dev design = %s, want minimax-m3", defaults["sdd-design"].ModelID)
 	}
 }
 
 func TestDefaultModelsForDomainDataEngineering(t *testing.T) {
 	defaults := DefaultModelsForDomain("data-engineering")
-	// Data-eng needs Sonnet for explore (not Haiku) — data profiling needs judgment
-	if defaults["sdd-explore"].ModelID != "claude-sonnet-4-20250514" {
-		t.Errorf("data-eng explore = %s, want claude-sonnet-4-20250514", defaults["sdd-explore"].ModelID)
+	// Data-eng needs glm-5.2 for explore (not minimax-m3) — data profiling needs heavy reasoning
+	if defaults["sdd-explore"].ModelID != "glm-5.2" {
+		t.Errorf("data-eng explore = %s, want glm-5.2", defaults["sdd-explore"].ModelID)
 	}
-	// Data-eng needs Opus for spec (not Sonnet) — schema + DAG needs precision
-	if defaults["sdd-spec"].ModelID != "claude-opus-4-20250514" {
-		t.Errorf("data-eng spec = %s, want claude-opus-4-20250514", defaults["sdd-spec"].ModelID)
+	// Data-eng needs minimax-m3 for spec (not kimi) — schema + DAG needs reasoning
+	if defaults["sdd-spec"].ModelID != "minimax-m3" {
+		t.Errorf("data-eng spec = %s, want minimax-m3", defaults["sdd-spec"].ModelID)
 	}
-	// Design stays Opus for both
-	if defaults["sdd-design"].ModelID != "claude-opus-4-20250514" {
-		t.Errorf("data-eng design = %s, want claude-opus-4-20250514", defaults["sdd-design"].ModelID)
+	// Design stays minimax-m3 for both
+	if defaults["sdd-design"].ModelID != "minimax-m3" {
+		t.Errorf("data-eng design = %s, want minimax-m3", defaults["sdd-design"].ModelID)
 	}
 }
 
@@ -47,11 +47,11 @@ func TestDefaultModelsForDomainHasAllPhases(t *testing.T) {
 func TestDefaultModelsForDomainDataEngDiffersFromAppDev(t *testing.T) {
 	appDev := DefaultModelsForDomain("")
 	dataEng := DefaultModelsForDomain("data-engineering")
-	// explore MUST differ: app-dev=Haiku, data-eng=Sonnet
+	// explore MUST differ: app-dev=minimax-m3, data-eng=glm-5.2
 	if appDev["sdd-explore"].ModelID == dataEng["sdd-explore"].ModelID {
 		t.Error("explore model should differ between app-dev and data-engineering")
 	}
-	// spec MUST differ: app-dev=Sonnet, data-eng=Opus
+	// spec MUST differ: app-dev=kimi, data-eng=minimax-m3
 	if appDev["sdd-spec"].ModelID == dataEng["sdd-spec"].ModelID {
 		t.Error("spec model should differ between app-dev and data-engineering")
 	}
