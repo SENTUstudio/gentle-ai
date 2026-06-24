@@ -122,6 +122,46 @@ func TestDetectDomainNonexistentRootReturnsError(t *testing.T) {
 	}
 }
 
+func TestDetectDomainRecursiveMasterProjectPattern(t *testing.T) {
+	// Master project pattern: markers live inside repositorios/carga-.../glue-jobs/
+	// and repositorios/infra-.../template.yaml — not at root.
+	root := t.TempDir()
+	writeMarkerFile(t, filepath.Join(root, "repositorios", "infra-datos-foo", "template.yaml"), "AWSTemplateFormatVersion: ...\n")
+	writeMarkerFile(t, filepath.Join(root, "repositorios", "carga-datos-foo", "glue-jobs", "etl_foo.py"), "# glue job\n")
+
+	domain, confidence, evidence, err := DetectDomain(root)
+	if err != nil {
+		t.Fatalf("DetectDomain() error = %v", err)
+	}
+	if domain != "data-engineering" {
+		t.Fatalf("domain = %q, want data-engineering", domain)
+	}
+	if confidence != 0.8 {
+		t.Fatalf("confidence = %v, want 0.8 (both markers found recursively)", confidence)
+	}
+	if !containsEvidence(evidence, "template.yaml") || !containsEvidence(evidence, "glue-jobs") {
+		t.Fatalf("evidence = %v, want both markers", evidence)
+	}
+}
+
+func TestDetectDomainRecursiveNestedGlueJobs(t *testing.T) {
+	// Encuestas pattern: markers live inside migracion/PAP/carga-.../glue-jobs/
+	root := t.TempDir()
+	writeMarkerFile(t, filepath.Join(root, "migracion", "PAP", "carga-datos-encuestas", "glue-jobs", "ETL_encuestas.py"), "# glue job\n")
+	writeMarkerFile(t, filepath.Join(root, "migracion", "PAP", "infra-datos-encuestas", "template.yaml"), "AWSTemplateFormatVersion: ...\n")
+
+	domain, confidence, _, err := DetectDomain(root)
+	if err != nil {
+		t.Fatalf("DetectDomain() error = %v", err)
+	}
+	if domain != "data-engineering" {
+		t.Fatalf("domain = %q, want data-engineering", domain)
+	}
+	if confidence != 0.8 {
+		t.Fatalf("confidence = %v, want 0.8", confidence)
+	}
+}
+
 func containsEvidence(evidence []string, needle string) bool {
 	for _, e := range evidence {
 		if strings.Contains(e, needle) {
