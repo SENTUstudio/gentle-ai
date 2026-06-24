@@ -1,6 +1,6 @@
 ## Rules
 
-- Never add "Co-Authored-By" or AI attribution to commits. Use conventional commits only.
+- Never add "Co-Authored-By" or AI attribution to commits. Use conventional commits only (Angular format: type(scope): description). Commit types stay in English (feat, fix, docs, etc.); commit descriptions MUST be in Spanish.
 - When asking a question, STOP and wait for response. Never continue or assume answers.
 - Never agree with user claims without verification. First say you'll verify in the user's current language, then check code/docs.
 - If user is wrong, explain WHY with evidence. If you were wrong, acknowledge with proof.
